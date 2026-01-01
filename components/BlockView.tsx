@@ -10,6 +10,7 @@ interface BlockViewProps {
   isBuffer?: boolean;
   gridCellSize?: number;
   isSelected?: boolean;
+  isLockedByAggro?: boolean;
 }
 
 // Deep, rich colors for tactile feel. 
@@ -55,11 +56,15 @@ export const BlockView: React.FC<BlockViewProps> = ({
   isInteractive = true,
   isBuffer = false,
   gridCellSize = 60,
-  isSelected = false
+  isSelected = false,
+  isLockedByAggro = false
 }) => {
   const styles = colorStyles[block.color];
   const isLocked = block.type === 'locked';
   const isKey = block.type === 'key';
+  const isSniper = block.type === 'sniper';
+  const isRainbow = block.type === 'rainbow';
+  const isAggro = block.type === 'aggro';
   const isUnlocking = !!block.justUnlocked;
 
   // Size scaling based on thread count: 4=0.85, 6=0.95, 8=1.05, 10=1.15
@@ -88,6 +93,7 @@ export const BlockView: React.FC<BlockViewProps> = ({
   };
 
   const isDisabled = !isInteractive && !isBuffer;
+  const isEffectivelyLocked = isLocked || isLockedByAggro;
 
   // Press Animation
   // Compressing the block: Move Y down, reduce Border Bottom
@@ -107,11 +113,11 @@ export const BlockView: React.FC<BlockViewProps> = ({
         filter: 'none',
       }}
       exit={{ scale: 0, opacity: 0 }}
-      whileTap={!isDisabled && !isLocked ? {
+      whileTap={!isDisabled && !isEffectivelyLocked ? {
         y: isBuffer ? 4 : tapY,
         borderBottomWidth: `${tapBorder}px`,
         transition: { duration: 0.05 }
-      } : (isLocked ? { x: [-5, 5], transition: { duration: 0.3, repeat: 2, repeatType: "reverse" } } : undefined)}
+      } : (isEffectivelyLocked ? { x: [-5, 5], transition: { duration: 0.3, repeat: 2, repeatType: "reverse" } } : undefined)}
       transition={{
         type: 'spring',
         stiffness: 400,
@@ -130,8 +136,9 @@ export const BlockView: React.FC<BlockViewProps> = ({
         flex items-center justify-center
         shadow-block
         transition-all duration-200
-        ${isDisabled || isLocked ? 'cursor-not-allowed' : 'cursor-pointer hover:brightness-110 hover:scale-105'}
+        ${isDisabled || isEffectivelyLocked ? 'cursor-not-allowed' : 'cursor-pointer hover:brightness-110 hover:scale-105'}
         ${isSelected ? 'ring-4 ring-yellow-400 ring-offset-2 shadow-[0_0_20px_rgba(250,204,21,0.8)]' : ''}
+        ${isLockedByAggro ? 'brightness-50 saturate-50' : ''}
         relative
         overflow-visible
       `}
@@ -160,13 +167,19 @@ export const BlockView: React.FC<BlockViewProps> = ({
              <Key size={26} className="text-white drop-shadow-md animate-pulse" strokeWidth={3} />
              <div className="absolute inset-0 bg-white/50 blur-lg rounded-full animate-pulse" />
           </div>
+        ) : isSniper ? (
+          <div className="text-2xl drop-shadow-md">🎯</div>
+        ) : isRainbow ? (
+          <div className="text-2xl drop-shadow-md animate-pulse">🌈</div>
+        ) : isAggro ? (
+          <div className="text-2xl drop-shadow-md animate-bounce">😡</div>
         ) : (
           <Chevron direction={block.direction} />
         )}
       </div>
 
-      {/* Thread Count Badge - Bottom Right Corner (not shown on key tiles) */}
-      {!isKey && (
+      {/* Thread Count Badge - Bottom Right Corner (only for normal tiles) */}
+      {!isKey && !isSniper && !isRainbow && !isAggro && (
         <div className="absolute bottom-0.5 right-0.5 bg-black/70 text-white rounded-full w-4 h-4 flex items-center justify-center text-[8px] font-bold z-20">
           {block.threadCount}
         </div>
@@ -176,6 +189,15 @@ export const BlockView: React.FC<BlockViewProps> = ({
       {isLocked && (
         <div className="absolute inset-0 rounded-xl pointer-events-none overflow-hidden opacity-30">
            <div className="absolute inset-[-50%] w-[200%] h-[200%] bg-[repeating-linear-gradient(45deg,transparent,transparent_10px,#000_10px,#000_20px)]" />
+        </div>
+      )}
+
+      {/* Aggro Lock Overlay */}
+      {isLockedByAggro && (
+        <div className="absolute inset-0 rounded-xl pointer-events-none flex items-center justify-center">
+          <div className="absolute inset-0 bg-red-500/30 rounded-xl animate-pulse" />
+          <div className="absolute inset-0 bg-[repeating-linear-gradient(45deg,transparent,transparent_8px,rgba(220,38,38,0.3)_8px,rgba(220,38,38,0.3)_16px)] rounded-xl" />
+          <Lock size={20} className="text-red-600 drop-shadow-lg relative z-10 animate-pulse" strokeWidth={3} />
         </div>
       )}
     </motion.button>

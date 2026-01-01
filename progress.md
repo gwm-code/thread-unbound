@@ -147,7 +147,7 @@ From `roadmap_in_use.md` Section 1:
 
 ---
 
-#### 7. Combo Scoring System ⚠️ PARTIAL (3/5 bonuses)
+#### 7. Combo Scoring System ✅ COMPLETE (5/5 bonuses)
 From `roadmap_in_use.md` Section 2:
 
 **Implemented:**
@@ -157,13 +157,17 @@ From `roadmap_in_use.md` Section 2:
   - Stacks with inventory score upgrades
 - [x] Perfect Clear (+500 points)
 - [x] No Undo (+200 points)
-
-**Missing:**
-- [ ] Thread Master (+150): Fire all 4 spools in single turn
-- [ ] Dragon Shrink Streak (+50 per segment over 5): Remove 5+ segments in one fire
+- [x] Thread Master (+150 points)
+  - Fire all 4 spools within 3-second window
+  - Tracks recently fired spools
+  - Awards bonus once per sequence
+- [x] Dragon Shrink Streak (+50 per segment over 5)
+  - Remove 6+ segments in one fire
+  - Scales with segments removed (6=+50, 7=+100, etc.)
 
 **Commits**:
 - Add combo scoring system with multipliers and bonuses
+- Add Thread Master and Dragon Shrink Streak bonuses
 
 ---
 
@@ -186,18 +190,21 @@ From `roadmap_in_use.md` Section 2:
 
 ## 🎯 NEXT PRIORITIES
 
-### ✅ Phase 1 Complete!
-All core foundation features have been implemented.
+### ✅ Phase 1 Complete! ✅ Section 2 Complete!
+All core foundation features and combo bonuses have been implemented.
 
-### Immediate (Complete Section 2 Bonuses)
-1. **Thread Master Bonus** - Fire all 4 spools in single turn: +150
-2. **Dragon Shrink Streak Bonus** - Remove 5+ segments in one fire: +50 per segment over 5
+### Immediate (Begin Phase 2)
+1. **Special Tiles** - Start with 3 tiles from Section 1:
+   - 🎯 Sniper Tile (click to target any dragon segment)
+   - 🌈 Rainbow Tile (choose color when placed in spool)
+   - 😡 Aggro Tile (3x dragon speed for 10 seconds)
 
-### Short-term (Begin Phase 2)
-3. **Special Tiles** - Start with Sniper, Rainbow, Aggro
-4. **Daily Challenges** - Daily retention mechanic
+### Short-term
+2. **Daily Challenges** - Daily retention mechanic with rewards
+3. **More Special Tiles** - Add remaining tiles from Section 1
 
 ### Medium-term (Continue Phase 2)
+4. **Dragon Variants** - Different dragon types with unique behaviors
 5. **Leaderboards** - Competitive element (may require backend)
 
 ---
@@ -243,6 +250,11 @@ All core foundation features have been implemented.
 - Added achievement tracking, unlocking logic, and notifications
 - Added 8 new achievement-specific stats to PlayerStats interface
 - Set to Array conversion for localStorage serialization (Set not JSON-compatible)
+
+**Combo System Bonuses (Jan 1, 2025)**:
+- Implemented Thread Master bonus (+150 when all 4 spools fire within 3 seconds)
+- Implemented Dragon Shrink Streak bonus (+50 per segment over 5)
+- Section 2 complete (5/5 bonuses)
 
 ---
 

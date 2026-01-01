@@ -127,6 +127,11 @@ export default function App() {
   const [lastActionTime, setLastActionTime] = useState<number>(0);
   const [moveCount, setMoveCount] = useState(0);
   const [usedUndo, setUsedUndo] = useState(false);
+
+  // Thread Master bonus tracking - track spools fired in rolling 3-second window
+  const [recentlyFiredSpools, setRecentlyFiredSpools] = useState<Set<number>>(new Set());
+  const [lastSpoolFireTime, setLastSpoolFireTime] = useState<number>(0);
+  const threadMasterBonusAwardedRef = useRef(false);
   const [history, setHistory] = useState<HistoryState[]>([]);
   const [selectedKey, setSelectedKey] = useState<Block | null>(null);
   const [dragonGrowthInterval, setDragonGrowthInterval] = useState(10000);
@@ -147,6 +152,14 @@ export default function App() {
 
   // Track level start time for speedrunner achievement
   const levelStartTimeRef = useRef<number>(0);
+
+  // Special Tiles State
+  const [selectedSniper, setSelectedSniper] = useState<Block | null>(null); // Sniper tile awaiting target selection
+  const [selectedRainbow, setSelectedRainbow] = useState<Block | null>(null); // Rainbow tile awaiting color selection
+  const [aggroEffectActive, setAggroEffectActive] = useState(false); // Aggro 3x speed effect active
+  const [aggroEffectEndTime, setAggroEffectEndTime] = useState<number>(0);
+  const [lastAggroSpitTime, setLastAggroSpitTime] = useState<number>(0); // For 30s cooldown
+  const [dragonUnder5StartTime, setDragonUnder5StartTime] = useState<number>(0); // When dragon first went under 5 segments
 
   // Load progress, settings, and currency from localStorage on mount
   useEffect(() => {
@@ -521,6 +534,60 @@ export default function App() {
     checkAndUnlockAchievements();
   }, [stats, currency]);
 
+  // --- AGGRO EFFECT TIMER ---
+  // Clear aggro effect after 10 seconds
+  useEffect(() => {
+    if (!aggroEffectActive) return;
+
+    const currentTime = Date.now();
+    const timeRemaining = aggroEffectEndTime - currentTime;
+
+    if (timeRemaining <= 0) {
+      console.log('😡 Aggro effect ended!');
+      setAggroEffectActive(false);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setAggroEffectActive(false);
+      console.log('😡 Aggro effect ended!');
+    }, timeRemaining);
+
+    return () => clearTimeout(timer);
+  }, [aggroEffectActive, aggroEffectEndTime]);
+
+  // Thread Master bonus: Clear recently fired spools after 3 seconds
+  useEffect(() => {
+    if (recentlyFiredSpools.size === 0) return;
+
+    const currentTime = Date.now();
+    const timeSinceLastFire = currentTime - lastSpoolFireTime;
+
+    if (timeSinceLastFire >= 3000) {
+      // Reset if no spools fired in last 3 seconds
+      setRecentlyFiredSpools(new Set());
+      threadMasterBonusAwardedRef.current = false;
+      return;
+    }
+
+    // Check if we have enough spools for Thread Master bonus
+    const requiredSpools = inventory.hasSpoolUpgrade ? 5 : 4;
+    if (recentlyFiredSpools.size >= requiredSpools && !threadMasterBonusAwardedRef.current) {
+      console.log('🏆 THREAD MASTER BONUS! All spools fired!');
+      addScore(150, false); // Flat bonus, no combo multiplier
+      threadMasterBonusAwardedRef.current = true;
+      playSound('win');
+    }
+
+    // Set a timer to clear after 3 seconds
+    const timer = setTimeout(() => {
+      setRecentlyFiredSpools(new Set());
+      threadMasterBonusAwardedRef.current = false;
+    }, 3000);
+
+    return () => clearTimeout(timer);
+  }, [recentlyFiredSpools, lastSpoolFireTime, inventory.hasSpoolUpgrade, addScore]);
+
   // Menu navigation handlers
   const handlePlay = () => {
     // Start at the highest level reached (next level to play)
@@ -677,6 +744,7 @@ export default function App() {
     levelRewardsGivenRef.current = false;
     levelAttemptCountedRef.current = false;
     kittyRescueCountedRef.current = false;
+    threadMasterBonusAwardedRef.current = false;
 
     // Track level start time for speedrunner achievement
     levelStartTimeRef.current = Date.now();
@@ -736,6 +804,10 @@ export default function App() {
     setDragonGrowthInterval(newGrowthInterval);
     setKitty({ isSwallowed: false, segmentIndex: 0 }); // Reset kitty to end of path
 
+    // Reset Thread Master tracking
+    setRecentlyFiredSpools(new Set());
+    setLastSpoolFireTime(0);
+
     // Note: levelsAttempted is tracked on first player action, not on level load
 
     // Starting Undo upgrade: Give 1 undo at start
@@ -778,11 +850,18 @@ export default function App() {
   };
 
   // --- SURVIVAL CLOCK ---
-  // Adds segment at dynamic interval (faster on harder levels + speed multiplier)
+  // Adds segment at dynamic interval (faster on harder levels + speed multiplier + aggro effect)
   useEffect(() => {
     if (gameState !== 'playing') return;
 
-    const adjustedInterval = dragonGrowthInterval / speedMultiplier;
+    // Apply both speed multiplier AND aggro effect (multiplicative)
+    let effectiveMultiplier = speedMultiplier;
+    if (aggroEffectActive) {
+      effectiveMultiplier *= 3; // Aggro adds another 3x on top of current speed
+      console.log('😡 Aggro effect active! Dragon growing faster!');
+    }
+
+    const adjustedInterval = dragonGrowthInterval / effectiveMultiplier;
 
     const interval = setInterval(() => {
       // Calculate max dragon length (when head reaches end of path)
@@ -831,7 +910,7 @@ export default function App() {
     }, adjustedInterval);
 
     return () => clearInterval(interval);
-  }, [gameState, dragonGrowthInterval, speedMultiplier]);
+  }, [gameState, dragonGrowthInterval, speedMultiplier, aggroEffectActive]);
 
   // --- SWALLOWING CHECK ---
   // Check if dragon head has reached kitty position (end of path)
@@ -863,6 +942,66 @@ export default function App() {
       playSound('error');
     }
   }, [kitty, dragon.length, gameState]);
+
+  // --- AGGRO TILE DRAGON SPITTING ---
+  // When dragon is under 5 segments for 15 seconds, spit out an Aggro tile (30s cooldown)
+  useEffect(() => {
+    if (gameState !== 'playing') return;
+
+    const currentTime = Date.now();
+    const dragonLength = dragon.length - 1; // Exclude head
+
+    // Check if dragon is under 5 segments
+    if (dragonLength < 5) {
+      // Start tracking if not already
+      if (dragonUnder5StartTime === 0) {
+        setDragonUnder5StartTime(currentTime);
+      }
+
+      // Check if 15 seconds have passed and cooldown is over
+      const timeUnder5 = currentTime - dragonUnder5StartTime;
+      const timeSinceLastSpit = currentTime - lastAggroSpitTime;
+
+      if (timeUnder5 >= 15000 && timeSinceLastSpit >= 30000) {
+        // Spit out Aggro tile!
+        console.log('🐉 DRAGON SPITTING AGGRO TILE!');
+
+        // Find random empty grid position
+        const emptyPositions: { x: number; y: number }[] = [];
+        for (let row = 0; row < GRID_SIZE.rows; row++) {
+          for (let col = 0; col < GRID_SIZE.cols; col++) {
+            const occupied = blocks.some(b => b.x === col && b.y === row);
+            if (!occupied) {
+              emptyPositions.push({ x: col, y: row });
+            }
+          }
+        }
+
+        if (emptyPositions.length > 0) {
+          const randomPos = emptyPositions[Math.floor(Math.random() * emptyPositions.length)];
+          const aggroTile: Block = {
+            id: generateUUID(),
+            x: randomPos.x,
+            y: randomPos.y,
+            color: 'red', // Aggro tiles are always red for visibility
+            direction: 'UP',
+            type: 'aggro',
+            threadCount: 0, // Doesn't remove segments
+          };
+
+          setBlocks(prev => [...prev, aggroTile]);
+          setLastAggroSpitTime(currentTime);
+          playSound('error'); // Warning sound
+          triggerHaptic([50, 50, 50]); // Strong haptic
+        }
+      }
+    } else {
+      // Reset timer if dragon goes above 5 segments
+      if (dragonUnder5StartTime !== 0) {
+        setDragonUnder5StartTime(0);
+      }
+    }
+  }, [dragon.length, gameState, dragonUnder5StartTime, lastAggroSpitTime, blocks]);
 
   // --- AUTO-FIRE MECHANISM ---
   // Check if snake head color matches any spool, then fire automatically
@@ -925,6 +1064,15 @@ export default function App() {
           firedThisCycle = true;
           console.log(`  ✅ FIRING spool ${spoolIndex}!`);
 
+          // Track spool firing for Thread Master bonus
+          const currentTime = Date.now();
+          setLastSpoolFireTime(currentTime);
+          setRecentlyFiredSpools(prev => {
+            const updated = new Set(prev);
+            updated.add(spoolIndex);
+            return updated;
+          });
+
           // Visual thread animation
           const threadId = generateUUID();
           setActiveThreads(prev => [...prev, {
@@ -972,6 +1120,14 @@ export default function App() {
                 // Track max segments in one turn
                 maxSegmentsInOneTurn: Math.max(prev.maxSegmentsInOneTurn, removed)
               }));
+
+              // Dragon Shrink Streak Bonus: +50 per segment over 5
+              if (removed > 5) {
+                const bonusSegments = removed - 5;
+                const bonusPoints = bonusSegments * 50;
+                addScore(bonusPoints, false); // Flat bonus, no combo multiplier
+                console.log(`🔥 DRAGON SHRINK STREAK! Removed ${removed} segments, bonus: +${bonusPoints}`);
+              }
             }
 
             // Play sound and haptics
@@ -1195,6 +1351,52 @@ export default function App() {
     }
   };
 
+  // Handle Sniper tile: Remove a specific dragon segment
+  const handleSniperTarget = (segmentIndex: number) => {
+    if (!selectedSniper) return;
+
+    console.log(`🎯 Sniper targeting segment ${segmentIndex}`);
+    pushHistory();
+    playSound('pop');
+    triggerHaptic([30, 30, 30]);
+
+    // Remove the selected segment
+    setDragon(prev => prev.filter((_, idx) => idx !== segmentIndex));
+
+    // Remove sniper tile from board
+    setBlocks(prev => prev.filter(b => b.id !== selectedSniper.id));
+
+    // Clear selection
+    setSelectedSniper(null);
+    registerComboAction();
+    addScore(50); // Bonus for using sniper
+  };
+
+  // Handle Rainbow tile: Choose a color
+  const handleRainbowColorSelect = (color: BlockColor) => {
+    if (!selectedRainbow) return;
+
+    console.log(`🌈 Rainbow tile changed to ${color}`);
+    pushHistory();
+    playSound('move');
+    triggerHaptic(10);
+
+    // Convert rainbow tile to normal tile with chosen color
+    const normalizedTile: Block = {
+      ...selectedRainbow,
+      type: 'normal',
+      color: color,
+      threadCount: selectedRainbow.threadCount || 6, // Default thread count
+    };
+
+    // Replace rainbow tile with normal colored tile
+    setBlocks(prev => prev.map(b => b.id === selectedRainbow.id ? normalizedTile : b));
+
+    // Clear selection
+    setSelectedRainbow(null);
+    registerComboAction();
+  };
+
   const handleBlockClick = (block: Block, source: 'grid' | 'conveyor') => {
     if (gameState !== 'playing') return;
 
@@ -1202,6 +1404,56 @@ export default function App() {
     if (!levelAttemptCountedRef.current) {
       levelAttemptCountedRef.current = true;
       setStats(prev => ({ ...prev, levelsAttempted: prev.levelsAttempted + 1 }));
+    }
+
+    // --- AGGRO TILE BOARD LOCK ---
+    // Check if there's an Aggro tile on the board - if so, only allow clicking it
+    const aggroTileOnBoard = blocks.find(b => b.type === 'aggro');
+    if (aggroTileOnBoard && source === 'grid' && block.id !== aggroTileOnBoard.id) {
+      // Board is locked - can only click Aggro tile
+      playSound('error');
+      triggerHaptic([100, 50, 100]); // Triple buzz to indicate lock
+      console.log('⚠️ Board locked! Must clear Aggro tile first!');
+      return;
+    }
+
+    // --- SPECIAL TILE HANDLING (from grid only) ---
+    if (source === 'grid') {
+      // SNIPER TILE: Enter target selection mode
+      if (block.type === 'sniper') {
+        console.log('🎯 Sniper tile clicked! Select a dragon segment to remove.');
+        setSelectedSniper(block);
+        playSound('move');
+        triggerHaptic(10);
+        return;
+      }
+
+      // RAINBOW TILE: Enter color selection mode
+      if (block.type === 'rainbow') {
+        console.log('🌈 Rainbow tile clicked! Select a color.');
+        setSelectedRainbow(block);
+        playSound('move');
+        triggerHaptic(10);
+        return;
+      }
+
+      // AGGRO TILE: Remove and trigger 3x speed effect
+      if (block.type === 'aggro') {
+        console.log('😡 AGGRO TILE CLEARED! Dragon speed x3 for 10 seconds!');
+        pushHistory();
+        playSound('error'); // Danger sound
+        triggerHaptic([50, 50, 50, 50]); // Strong warning haptics
+
+        // Remove Aggro tile from board
+        setBlocks(prev => prev.filter(b => b.id !== block.id));
+
+        // Activate Aggro effect (3x speed for 10 seconds)
+        setAggroEffectActive(true);
+        setAggroEffectEndTime(Date.now() + 10000);
+
+        // Effect will be cleared by useEffect watching aggroEffectEndTime
+        return;
+      }
     }
 
     // --- KEY BLOCK SPECIAL LOGIC (from grid only) ---
@@ -1534,7 +1786,12 @@ export default function App() {
       {/* Main Game Area */}
       <main className="w-full max-w-4xl mx-auto px-2 flex flex-col items-center gap-2 relative z-10">
         {/* Dragon - More compact */}
-        <DragonView segments={dragon} kitty={kitty} />
+        <DragonView
+          segments={dragon}
+          kitty={kitty}
+          onSegmentClick={selectedSniper ? handleSniperTarget : undefined}
+          sniperMode={!!selectedSniper}
+        />
 
         {/* Spools - Horizontal at top of grid */}
         <div className="w-full flex justify-center py-1 z-30">
@@ -1548,6 +1805,7 @@ export default function App() {
             gridSize={GRID_SIZE}
             onBlockClick={(b) => handleBlockClick(b, 'grid')}
             selectedKeyId={selectedKey?.id}
+            aggroTileId={blocks.find(b => b.type === 'aggro')?.id || null}
           />
         </div>
 
@@ -1671,6 +1929,63 @@ export default function App() {
                </button>
              </div>
            </div>
+        </div>
+      )}
+
+      {/* SNIPER TARGETING OVERLAY */}
+      {selectedSniper && (
+        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center p-6 pointer-events-none">
+          <div className="bg-slate-800/95 backdrop-blur-md rounded-2xl shadow-2xl p-6 border-2 border-slate-600 pointer-events-auto">
+            <div className="text-center text-white mb-4">
+              <div className="text-5xl mb-3">🎯</div>
+              <h2 className="text-2xl font-bold mb-2">Sniper Mode</h2>
+              <p className="text-white/80 mb-4">Click a dragon segment to remove it</p>
+              <button
+                onClick={() => setSelectedSniper(null)}
+                className="px-6 py-2 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 active:scale-95 transition-all"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* RAINBOW COLOR SELECTION OVERLAY */}
+      {selectedRainbow && (
+        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center p-6 pointer-events-none">
+          <div className="bg-slate-800/95 backdrop-blur-md rounded-2xl shadow-2xl p-6 border-2 border-slate-600 pointer-events-auto">
+            <div className="text-center text-white mb-4">
+              <div className="text-5xl mb-3">🌈</div>
+              <h2 className="text-2xl font-bold mb-2">Rainbow Tile</h2>
+              <p className="text-white/80 mb-4">Choose a color</p>
+            </div>
+
+            <div className="flex gap-3 mb-4">
+              {(['red', 'blue', 'green', 'yellow', 'purple'] as BlockColor[]).map(color => (
+                <button
+                  key={color}
+                  onClick={() => handleRainbowColorSelect(color)}
+                  className={`
+                    w-16 h-16 rounded-xl border-4 border-white/50 shadow-lg
+                    hover:scale-110 hover:border-white active:scale-95 transition-all
+                    ${color === 'red' ? 'bg-red-500' : ''}
+                    ${color === 'blue' ? 'bg-blue-500' : ''}
+                    ${color === 'green' ? 'bg-emerald-500' : ''}
+                    ${color === 'yellow' ? 'bg-amber-400' : ''}
+                    ${color === 'purple' ? 'bg-violet-500' : ''}
+                  `}
+                />
+              ))}
+            </div>
+
+            <button
+              onClick={() => setSelectedRainbow(null)}
+              className="w-full px-6 py-2 bg-slate-600 text-white font-bold rounded-xl hover:bg-slate-700 active:scale-95 transition-all"
+            >
+              Cancel
+            </button>
+          </div>
         </div>
       )}
 

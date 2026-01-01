@@ -2,7 +2,7 @@ export type Direction = 'UP' | 'DOWN' | 'LEFT' | 'RIGHT' | 'UP-LEFT' | 'UP-RIGHT
 
 export type BlockColor = 'red' | 'blue' | 'green' | 'yellow' | 'purple';
 
-export type BlockType = 'normal' | 'key' | 'locked';
+export type BlockType = 'normal' | 'key' | 'locked' | 'sniper' | 'rainbow' | 'aggro';
 
 export type GameState = 'playing' | 'won' | 'game_over';
 

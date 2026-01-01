@@ -244,15 +244,28 @@ export const loadLevel = (config: LevelConfig): { blocks: Block[], dragon: Block
 };
 
 export const generateConveyorBlocks = (count: number = 5): Block[] => {
-  return Array.from({ length: count }, (_, i) => ({
-    id: `conveyor-${generateUUID()}`,
-    x: -1,
-    y: -1,
-    color: getRandomColor(),
-    direction: getRandomDirection(),
-    type: 'normal', // Keys only appear in designed levels
-    threadCount: getRandomThreadCount()
-  }));
+  return Array.from({ length: count }, (_, i) => {
+    // 10% chance for special tiles (3% sniper, 4% rainbow, 3% aggro from conveyor is disabled)
+    const rand = Math.random();
+    let blockType: BlockType = 'normal';
+
+    if (rand < 0.03) {
+      blockType = 'sniper'; // 3% chance
+    } else if (rand < 0.07) {
+      blockType = 'rainbow'; // 4% chance (0.03 to 0.07)
+    }
+    // Note: Aggro tiles only come from dragon spitting, not conveyor
+
+    return {
+      id: `conveyor-${generateUUID()}`,
+      x: -1,
+      y: -1,
+      color: getRandomColor(),
+      direction: getRandomDirection(),
+      type: blockType,
+      threadCount: getRandomThreadCount()
+    };
+  });
 };
 
 export const generateDragon = (length: number = 20): BlockColor[] => {

@@ -6,6 +6,8 @@ import { Cat } from 'lucide-react';
 interface DragonViewProps {
   segments: DragonSegment[];
   kitty: Kitty;
+  onSegmentClick?: (segmentIndex: number) => void;
+  sniperMode?: boolean;
 }
 
 const segmentColors: Record<BlockColor, string> = {
@@ -54,7 +56,7 @@ const getPathPosition = (distance: number, totalLength: number): { x: number; y:
   return { x, y };
 };
 
-export const DragonView: React.FC<DragonViewProps> = ({ segments, kitty }) => {
+export const DragonView: React.FC<DragonViewProps> = ({ segments, kitty, onSegmentClick, sniperMode = false }) => {
   // Config
   const radius = 18;
   // Moderate overlap - segments must be visible but connected
@@ -216,6 +218,12 @@ export const DragonView: React.FC<DragonViewProps> = ({ segments, kitty }) => {
                     fill={isHead ? '#3d2f24' : segmentColors[segment.color]}
                     stroke={isHead ? '#1a1410' : segmentStrokes[segment.color]}
                     strokeWidth={2}
+                    onClick={sniperMode && !isHead ? () => onSegmentClick?.(index) : undefined}
+                    className={sniperMode && !isHead ? 'cursor-pointer hover:brightness-125 transition-all' : ''}
+                    style={{
+                      filter: sniperMode && !isHead ? 'drop-shadow(0 0 8px rgba(255,255,255,0.8))' : undefined,
+                      pointerEvents: sniperMode && !isHead ? 'all' : 'none'
+                    }}
                   />
 
                   {/* Highlight */}
