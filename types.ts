@@ -63,3 +63,31 @@ export interface PlayerCurrency {
   coins: number;  // Sumo Coins - primary gameplay currency
   gems: number;   // Thread Gems - premium/rare currency
 }
+
+export type ShopItemType = 'consumable' | 'permanent';
+export type CurrencyType = 'coins' | 'gems';
+
+export interface ShopItem {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  currency: CurrencyType;
+  type: ShopItemType;
+  icon: string; // Emoji
+  maxPurchases?: number; // For multi-tier upgrades (e.g., Score Multiplier I, II, III)
+}
+
+export interface PlayerInventory {
+  // Consumables (can have multiple)
+  extraUndos: number;
+  freezeTime: number;
+  conveyorSpeed: number;
+  rerollGrid: number;
+
+  // Permanent upgrades (boolean flags)
+  scoreMultiplierLevel: number; // 0, 1, 2, or 3 (I, II, III)
+  hasStartingUndo: boolean;
+  hasSpoolUpgrade: boolean; // 5 spools instead of 4
+  hasCoinMagnet: boolean; // +25% coins
+}

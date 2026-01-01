@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { RefreshCw, Play, Info, RotateCcw, Shuffle, Trophy, XCircle, Clock, Map, Coins, Gem } from 'lucide-react';
 // Toast removed - no longer needed
-import { Block, Spool, BlockColor, Thread, GameState, DragonSegment, Kitty, PlayerCurrency } from './types';
+import { Block, Spool, BlockColor, Thread, GameState, DragonSegment, Kitty, PlayerCurrency, PlayerInventory } from './types';
 import {
   GRID_SIZE,
   generateLevel,
@@ -23,12 +23,15 @@ import { ThreadConnection } from './components/ThreadConnection';
 import { ConveyorBelt } from './components/ConveyorBelt';
 import { StartMenu } from './components/StartMenu';
 import { Settings } from './components/Settings';
+import { Shop } from './components/Shop';
+import { SHOP_ITEMS } from './data/shopItems';
 
 // LocalStorage keys
 const PROGRESS_KEY = 'thread-unbound-progress';
 const SETTINGS_KEY = 'thread-unbound-settings';
 const CURRENCY_KEY = 'thread-unbound-currency';
 const COMPLETED_LEVELS_KEY = 'thread-unbound-completed-levels';
+const INVENTORY_KEY = 'thread-unbound-inventory';
 
 type Screen = 'menu' | 'playing' | 'settings' | 'shop' | 'achievements' | 'leaderboards' | 'profile' | 'daily-challenge';
 
@@ -59,6 +62,18 @@ export default function App() {
   const [currency, setCurrency] = useState<PlayerCurrency>({
     coins: 0,
     gems: 0,
+  });
+
+  // Inventory
+  const [inventory, setInventory] = useState<PlayerInventory>({
+    extraUndos: 0,
+    freezeTime: 0,
+    conveyorSpeed: 0,
+    rerollGrid: 0,
+    scoreMultiplierLevel: 0,
+    hasStartingUndo: false,
+    hasSpoolUpgrade: false,
+    hasCoinMagnet: false,
   });
 
   // Game state
@@ -125,6 +140,17 @@ export default function App() {
         console.error('Failed to parse completed levels:', e);
       }
     }
+
+    // Load inventory
+    const savedInventory = localStorage.getItem(INVENTORY_KEY);
+    if (savedInventory) {
+      try {
+        const parsedInventory = JSON.parse(savedInventory);
+        setInventory(parsedInventory);
+      } catch (e) {
+        console.error('Failed to parse inventory:', e);
+      }
+    }
   }, []);
 
   // Save settings to localStorage when they change
@@ -141,6 +167,11 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem(COMPLETED_LEVELS_KEY, JSON.stringify(Array.from(completedLevels)));
   }, [completedLevels]);
+
+  // Save inventory to localStorage when it changes
+  useEffect(() => {
+    localStorage.setItem(INVENTORY_KEY, JSON.stringify(inventory));
+  }, [inventory]);
 
   // Save progress to localStorage when highest level changes
   // level = the level index just completed
@@ -164,7 +195,10 @@ export default function App() {
 
   // Currency helper functions
   const addCoins = (amount: number) => {
-    setCurrency(prev => ({ ...prev, coins: prev.coins + amount }));
+    // Apply coin magnet bonus (+25%)
+    const bonusMultiplier = inventory.hasCoinMagnet ? 1.25 : 1;
+    const finalAmount = Math.floor(amount * bonusMultiplier);
+    setCurrency(prev => ({ ...prev, coins: prev.coins + finalAmount }));
   };
 
   const addGems = (amount: number) => {
@@ -187,6 +221,18 @@ export default function App() {
     return false;
   };
 
+  // Score helper with multiplier
+  const addScore = (amount: number) => {
+    // Apply score multiplier bonus
+    let multiplier = 1;
+    if (inventory.scoreMultiplierLevel === 1) multiplier = 1.1;  // +10%
+    if (inventory.scoreMultiplierLevel === 2) multiplier = 1.25; // +25%
+    if (inventory.scoreMultiplierLevel === 3) multiplier = 1.5;  // +50%
+
+    const finalAmount = Math.floor(amount * multiplier);
+    setScore(prev => prev + finalAmount);
+  };
+
   // Menu navigation handlers
   const handlePlay = () => {
     // Start at the highest level reached (next level to play)
@@ -206,15 +252,106 @@ export default function App() {
       localStorage.removeItem(CURRENCY_KEY);
       localStorage.removeItem(COMPLETED_LEVELS_KEY);
       localStorage.removeItem(SETTINGS_KEY);
+      localStorage.removeItem(INVENTORY_KEY);
 
       // Reload the page to reset all state
       window.location.reload();
     }
   };
 
-  // Initialize 4 Spools (not 5 buffer slots!)
+  // Shop purchase handler
+  const handlePurchase = (itemId: string): boolean => {
+    console.log('Attempting to purchase:', itemId);
+
+    // Find the item
+    const item = SHOP_ITEMS.find(i => i.id === itemId);
+    if (!item) return false;
+
+    // Check if can afford
+    const canAfford = item.currency === 'coins'
+      ? currency.coins >= item.price
+      : currency.gems >= item.price;
+
+    if (!canAfford) {
+      console.log('Cannot afford item');
+      return false;
+    }
+
+    // Check if already owned (permanent items only)
+    if (item.type === 'permanent') {
+      const alreadyOwned =
+        (itemId === 'score-multiplier-1' && inventory.scoreMultiplierLevel >= 1) ||
+        (itemId === 'score-multiplier-2' && inventory.scoreMultiplierLevel >= 2) ||
+        (itemId === 'score-multiplier-3' && inventory.scoreMultiplierLevel >= 3) ||
+        (itemId === 'starting-undo' && inventory.hasStartingUndo) ||
+        (itemId === 'spool-upgrade' && inventory.hasSpoolUpgrade) ||
+        (itemId === 'coin-magnet' && inventory.hasCoinMagnet);
+
+      if (alreadyOwned) {
+        console.log('Already owned');
+        return false;
+      }
+    }
+
+    // Deduct currency
+    if (item.currency === 'coins') {
+      if (!spendCoins(item.price)) return false;
+    } else {
+      if (!spendGems(item.price)) return false;
+    }
+
+    // Add to inventory
+    setInventory(prev => {
+      const newInventory = { ...prev };
+
+      switch (itemId) {
+        // Consumables
+        case 'extra-undo':
+          newInventory.extraUndos += 1;
+          break;
+        case 'freeze-time':
+          newInventory.freezeTime += 1;
+          break;
+        case 'conveyor-speed':
+          newInventory.conveyorSpeed += 1;
+          break;
+        case 'reroll-grid':
+          newInventory.rerollGrid += 1;
+          break;
+
+        // Permanent upgrades
+        case 'score-multiplier-1':
+          newInventory.scoreMultiplierLevel = 1;
+          break;
+        case 'score-multiplier-2':
+          newInventory.scoreMultiplierLevel = 2;
+          break;
+        case 'score-multiplier-3':
+          newInventory.scoreMultiplierLevel = 3;
+          break;
+        case 'starting-undo':
+          newInventory.hasStartingUndo = true;
+          break;
+        case 'spool-upgrade':
+          newInventory.hasSpoolUpgrade = true;
+          break;
+        case 'coin-magnet':
+          newInventory.hasCoinMagnet = true;
+          break;
+      }
+
+      return newInventory;
+    });
+
+    playSound('pop');
+    triggerHaptic([20, 20]);
+    return true;
+  };
+
+  // Initialize Spools (4 or 5 depending on upgrade)
   const initSpools = () => {
-    return Array.from({ length: 4 }, (_, i) => ({ id: i, block: null }));
+    const spoolCount = inventory.hasSpoolUpgrade ? 5 : 4;
+    return Array.from({ length: spoolCount }, (_, i) => ({ id: i, block: null }));
   };
 
   // Helper: Calculate position on the path (matches DragonView logic)
@@ -285,21 +422,36 @@ export default function App() {
       color: c
     }));
 
+    const newSpools = initSpools();
+    const initialConveyorBlocks = generateConveyorBlocks(10);
+
     setBlocks(newBlocks);
     setDragon(newDragon);
     setInitialDragonSize(newDragon.length);
     // Generate 10 tiles to fill the belt
-    const initialBlocks = generateConveyorBlocks(10);
-    setConveyorBlocks(initialBlocks);
+    setConveyorBlocks(initialConveyorBlocks);
     setHiddenConveyorIds(new Set()); // Reset hidden conveyor tiles
-    setSpools(initSpools());
+    setSpools(newSpools);
     setActiveThreads([]);
     setGameState('playing');
     setScore(0);
-    setHistory([]);
     setSelectedKey(null);
     setDragonGrowthInterval(newGrowthInterval);
     setKitty({ isSwallowed: false, segmentIndex: 0 }); // Reset kitty to end of path
+
+    // Starting Undo upgrade: Give 1 undo at start
+    if (inventory.hasStartingUndo) {
+      setHistory([{
+        blocks: newBlocks,
+        spools: newSpools,
+        dragon: newDragon,
+        conveyorBlocks: initialConveyorBlocks,
+        score: 0,
+      }]);
+    } else {
+      setHistory([]);
+    }
+
     playSound('move');
   }, [levelIndex]);
 
@@ -587,8 +739,8 @@ export default function App() {
             return newSpools;
           });
 
-          // Add score based on segments actually removed
-          setScore(s => s + segmentsToRemove * 10);
+          // Add score based on segments actually removed (with multiplier)
+          addScore(segmentsToRemove * 10);
         }
       }
     }, 600); // 600ms delay to allow visual feedback
@@ -845,7 +997,7 @@ export default function App() {
        }
        return newDragon;
     });
-    setScore(s => s + 100);
+    addScore(100);
   };
 
   // Render different screens based on currentScreen
@@ -878,8 +1030,19 @@ export default function App() {
     );
   }
 
+  if (currentScreen === 'shop') {
+    return (
+      <Shop
+        currency={currency}
+        inventory={inventory}
+        onPurchase={handlePurchase}
+        onClose={handleBackToMenu}
+      />
+    );
+  }
+
   // Placeholder screens for future features
-  if (currentScreen === 'shop' || currentScreen === 'achievements' || currentScreen === 'leaderboards' || currentScreen === 'profile' || currentScreen === 'daily-challenge') {
+  if (currentScreen === 'achievements' || currentScreen === 'leaderboards' || currentScreen === 'profile' || currentScreen === 'daily-challenge') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex flex-col items-center justify-center p-4">
         <div className="text-center text-white">
