@@ -1,5 +1,7 @@
 // Simple synth-based sound manager to avoid external assets
 
+const SETTINGS_KEY = 'thread-unbound-settings';
+
 const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
 let audioCtx: AudioContext | null = null;
 
@@ -13,9 +15,36 @@ const initAudio = () => {
   return audioCtx;
 };
 
+const isSoundEnabled = (): boolean => {
+  try {
+    const settings = localStorage.getItem(SETTINGS_KEY);
+    if (settings) {
+      const parsed = JSON.parse(settings);
+      return parsed.soundEnabled !== false; // Default to true
+    }
+  } catch (e) {
+    // Ignore
+  }
+  return true; // Default to enabled
+};
+
+const isHapticsEnabled = (): boolean => {
+  try {
+    const settings = localStorage.getItem(SETTINGS_KEY);
+    if (settings) {
+      const parsed = JSON.parse(settings);
+      return parsed.hapticsEnabled !== false; // Default to true
+    }
+  } catch (e) {
+    // Ignore
+  }
+  return true; // Default to enabled
+};
+
 type SoundType = 'move' | 'pop' | 'error' | 'win' | 'shuffle' | 'undo';
 
 export const playSound = (type: SoundType) => {
+  if (!isSoundEnabled()) return;
   try {
     const ctx = initAudio();
     const osc = ctx.createOscillator();
@@ -113,6 +142,7 @@ export const playSound = (type: SoundType) => {
 };
 
 export const triggerHaptic = (pattern: number | number[] = 10) => {
+  if (!isHapticsEnabled()) return;
   if (typeof navigator !== 'undefined' && navigator.vibrate) {
     navigator.vibrate(pattern);
   }

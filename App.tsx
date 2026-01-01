@@ -21,9 +21,19 @@ import { BufferArea } from './components/BufferArea';
 import { DragonView } from './components/DragonView';
 import { ThreadConnection } from './components/ThreadConnection';
 import { ConveyorBelt } from './components/ConveyorBelt';
+import { StartMenu } from './components/StartMenu';
+import { Settings } from './components/Settings';
 
-// LocalStorage key for saving progress
+// LocalStorage keys
 const PROGRESS_KEY = 'thread-unbound-progress';
+const SETTINGS_KEY = 'thread-unbound-settings';
+
+type Screen = 'menu' | 'playing' | 'settings' | 'shop' | 'achievements' | 'leaderboards' | 'profile' | 'daily-challenge';
+
+interface GameSettings {
+  soundEnabled: boolean;
+  hapticsEnabled: boolean;
+}
 
 interface HistoryState {
   blocks: Block[];
@@ -34,6 +44,16 @@ interface HistoryState {
 }
 
 export default function App() {
+  // Screen navigation
+  const [currentScreen, setCurrentScreen] = useState<Screen>('menu');
+
+  // Settings
+  const [settings, setSettings] = useState<GameSettings>({
+    soundEnabled: true,
+    hapticsEnabled: true,
+  });
+
+  // Game state
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [conveyorBlocks, setConveyorBlocks] = useState<Block[]>([]);
   const [hiddenConveyorIds, setHiddenConveyorIds] = useState<Set<string>>(new Set());
@@ -52,14 +72,31 @@ export default function App() {
   const [showCheckpointModal, setShowCheckpointModal] = useState(false);
   const [kitty, setKitty] = useState<Kitty>({ isSwallowed: false, segmentIndex: 0 });
 
-  // Load progress from localStorage on mount
+  // Load progress and settings from localStorage on mount
   useEffect(() => {
-    const saved = localStorage.getItem(PROGRESS_KEY);
-    if (saved) {
-      const progress = parseInt(saved, 10);
+    // Load progress
+    const savedProgress = localStorage.getItem(PROGRESS_KEY);
+    if (savedProgress) {
+      const progress = parseInt(savedProgress, 10);
       setHighestLevelReached(progress);
     }
+
+    // Load settings
+    const savedSettings = localStorage.getItem(SETTINGS_KEY);
+    if (savedSettings) {
+      try {
+        const parsedSettings = JSON.parse(savedSettings);
+        setSettings(parsedSettings);
+      } catch (e) {
+        console.error('Failed to parse settings:', e);
+      }
+    }
   }, []);
+
+  // Save settings to localStorage when they change
+  useEffect(() => {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  }, [settings]);
 
   // Save progress to localStorage when highest level changes
   const saveProgress = (level: number) => {
@@ -76,6 +113,16 @@ export default function App() {
       checkpoints.push(i);
     }
     return checkpoints;
+  };
+
+  // Menu navigation handlers
+  const handlePlay = () => {
+    setCurrentScreen('playing');
+    startNewGame(true);
+  };
+
+  const handleBackToMenu = () => {
+    setCurrentScreen('menu');
   };
 
   // Initialize 4 Spools (not 5 buffer slots!)
@@ -688,6 +735,53 @@ export default function App() {
     setScore(s => s + 100);
   };
 
+  // Render different screens based on currentScreen
+  if (currentScreen === 'menu') {
+    return (
+      <StartMenu
+        currentLevel={levelIndex + 1}
+        onPlay={handlePlay}
+        onDailyChallenge={() => setCurrentScreen('daily-challenge')}
+        onShop={() => setCurrentScreen('shop')}
+        onAchievements={() => setCurrentScreen('achievements')}
+        onLeaderboards={() => setCurrentScreen('leaderboards')}
+        onSettings={() => setCurrentScreen('settings')}
+        onProfile={() => setCurrentScreen('profile')}
+      />
+    );
+  }
+
+  if (currentScreen === 'settings') {
+    return (
+      <Settings
+        soundEnabled={settings.soundEnabled}
+        hapticsEnabled={settings.hapticsEnabled}
+        onSoundToggle={() => setSettings(prev => ({ ...prev, soundEnabled: !prev.soundEnabled }))}
+        onHapticsToggle={() => setSettings(prev => ({ ...prev, hapticsEnabled: !prev.hapticsEnabled }))}
+        onClose={handleBackToMenu}
+      />
+    );
+  }
+
+  // Placeholder screens for future features
+  if (currentScreen === 'shop' || currentScreen === 'achievements' || currentScreen === 'leaderboards' || currentScreen === 'profile' || currentScreen === 'daily-challenge') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex flex-col items-center justify-center p-4">
+        <div className="text-center text-white">
+          <h2 className="text-3xl font-bold mb-4 capitalize">{currentScreen.replace('-', ' ')}</h2>
+          <p className="text-purple-200 mb-8">Coming soon!</p>
+          <button
+            onClick={handleBackToMenu}
+            className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-bold rounded-xl hover:from-blue-700 hover:to-purple-700 active:scale-95 transition-all"
+          >
+            Back to Menu
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Playing screen
   return (
     <div className="min-h-screen bg-game-bg flex flex-col font-sans relative overflow-hidden select-none">
       <ThreadConnection activeThreads={activeThreads} />
@@ -696,6 +790,15 @@ export default function App() {
       <header className="px-3 py-2 bg-white shadow-sm z-30 relative">
         <div className="flex justify-between items-center">
           <div className="flex items-center gap-2">
+            <button
+              onClick={handleBackToMenu}
+              className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full active:scale-95 transition-all"
+              title="Menu"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
             <div className="flex items-center gap-1.5 bg-indigo-100 px-2 py-0.5 rounded-md">
               <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider">
                 {levelIndex < LEVELS.length ? 'Tutorial' : 'Lvl'} {levelIndex + 1}
@@ -792,6 +895,12 @@ export default function App() {
                >
                  Replay
                </button>
+               <button
+                 onClick={handleBackToMenu}
+                 className="w-full py-2 bg-slate-100 text-slate-600 font-medium rounded-xl hover:bg-slate-200 active:scale-95 transition-all"
+               >
+                 Menu
+               </button>
              </div>
            </div>
         </div>
@@ -819,6 +928,12 @@ export default function App() {
                  className="w-full py-3 bg-white text-slate-800 font-bold rounded-xl hover:bg-slate-100 active:scale-95 transition-all"
                >
                  Try Again
+               </button>
+               <button
+                 onClick={handleBackToMenu}
+                 className="w-full py-2 bg-slate-700 text-slate-300 font-medium rounded-xl hover:bg-slate-600 active:scale-95 transition-all"
+               >
+                 Menu
                </button>
              </div>
            </div>
