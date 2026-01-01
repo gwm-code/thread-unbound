@@ -1,11 +1,12 @@
 import React from 'react';
-import { X, Volume2, VolumeX, Vibrate } from 'lucide-react';
+import { X, Volume2, VolumeX, Vibrate, RotateCcw } from 'lucide-react';
 
 interface SettingsProps {
   soundEnabled: boolean;
   hapticsEnabled: boolean;
   onSoundToggle: () => void;
   onHapticsToggle: () => void;
+  onResetProgress: () => void;
   onClose: () => void;
 }
 
@@ -14,6 +15,7 @@ export const Settings: React.FC<SettingsProps> = ({
   hapticsEnabled,
   onSoundToggle,
   onHapticsToggle,
+  onResetProgress,
   onClose,
 }) => {
   return (
@@ -51,13 +53,24 @@ export const Settings: React.FC<SettingsProps> = ({
           />
         </div>
 
+        {/* Danger Zone */}
+        <div className="mt-6 pt-4 border-t border-slate-700">
+          <button
+            onClick={onResetProgress}
+            className="w-full flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white font-semibold py-3 rounded-xl transition-colors"
+          >
+            <RotateCcw className="w-5 h-5" />
+            Reset All Progress
+          </button>
+          <p className="text-slate-500 text-xs text-center mt-2">
+            Clears levels, currency, and settings
+          </p>
+        </div>
+
         {/* Footer Info */}
-        <div className="mt-8 pt-4 border-t border-slate-700">
+        <div className="mt-6 pt-4 border-t border-slate-700">
           <p className="text-slate-400 text-sm text-center">
             Thread Unbound v1.0.0
-          </p>
-          <p className="text-slate-500 text-xs text-center mt-1">
-            More settings coming soon!
           </p>
         </div>
       </div>

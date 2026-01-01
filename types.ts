@@ -58,3 +58,8 @@ export interface LevelConfig {
   dragon: BlockColor[];
   conveyorCount: number;
 }
+
+export interface PlayerCurrency {
+  coins: number;  // Sumo Coins - primary gameplay currency
+  gems: number;   // Thread Gems - premium/rare currency
+}

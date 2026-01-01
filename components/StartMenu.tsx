@@ -1,8 +1,10 @@
 import React from 'react';
-import { Play, ShoppingBag, Trophy, BarChart3, Settings, User } from 'lucide-react';
+import { Play, ShoppingBag, Trophy, BarChart3, Settings, User, Coins, Gem } from 'lucide-react';
+import { PlayerCurrency } from '../types';
 
 interface StartMenuProps {
   currentLevel: number;
+  currency: PlayerCurrency;
   onPlay: () => void;
   onDailyChallenge: () => void;
   onShop: () => void;
@@ -14,6 +16,7 @@ interface StartMenuProps {
 
 export const StartMenu: React.FC<StartMenuProps> = ({
   currentLevel,
+  currency,
   onPlay,
   onDailyChallenge,
   onShop,
@@ -35,9 +38,21 @@ export const StartMenu: React.FC<StartMenuProps> = ({
         <h1 className="text-5xl md:text-6xl font-bold text-white mb-2 drop-shadow-lg">
           Thread Unbound
         </h1>
-        <p className="text-purple-200 text-sm md:text-base">
+        <p className="text-purple-200 text-sm md:text-base mb-3">
           Level {currentLevel}
         </p>
+
+        {/* Currency Display */}
+        <div className="flex items-center justify-center gap-4">
+          <div className="flex items-center gap-1.5 bg-white/10 backdrop-blur-sm px-3 py-1.5 rounded-lg">
+            <Coins className="w-4 h-4 text-amber-400" />
+            <span className="text-white font-bold">{currency.coins.toLocaleString()}</span>
+          </div>
+          <div className="flex items-center gap-1.5 bg-white/10 backdrop-blur-sm px-3 py-1.5 rounded-lg">
+            <Gem className="w-4 h-4 text-cyan-400" />
+            <span className="text-white font-bold">{currency.gems.toLocaleString()}</span>
+          </div>
+        </div>
       </div>
 
       {/* Menu Buttons */}

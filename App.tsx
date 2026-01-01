@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { RefreshCw, Play, Info, RotateCcw, Shuffle, Trophy, XCircle, Clock, Map } from 'lucide-react';
+import { RefreshCw, Play, Info, RotateCcw, Shuffle, Trophy, XCircle, Clock, Map, Coins, Gem } from 'lucide-react';
 // Toast removed - no longer needed
-import { Block, Spool, BlockColor, Thread, GameState, DragonSegment, Kitty } from './types';
+import { Block, Spool, BlockColor, Thread, GameState, DragonSegment, Kitty, PlayerCurrency } from './types';
 import {
   GRID_SIZE,
   generateLevel,
@@ -27,6 +27,8 @@ import { Settings } from './components/Settings';
 // LocalStorage keys
 const PROGRESS_KEY = 'thread-unbound-progress';
 const SETTINGS_KEY = 'thread-unbound-settings';
+const CURRENCY_KEY = 'thread-unbound-currency';
+const COMPLETED_LEVELS_KEY = 'thread-unbound-completed-levels';
 
 type Screen = 'menu' | 'playing' | 'settings' | 'shop' | 'achievements' | 'leaderboards' | 'profile' | 'daily-challenge';
 
@@ -53,6 +55,12 @@ export default function App() {
     hapticsEnabled: true,
   });
 
+  // Currency
+  const [currency, setCurrency] = useState<PlayerCurrency>({
+    coins: 0,
+    gems: 0,
+  });
+
   // Game state
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [conveyorBlocks, setConveyorBlocks] = useState<Block[]>([]);
@@ -69,10 +77,14 @@ export default function App() {
   const [dragonGrowthInterval, setDragonGrowthInterval] = useState(10000);
   const [speedMultiplier, setSpeedMultiplier] = useState(3); // Default 3x (fast), can toggle to 1x (slow)
   const [highestLevelReached, setHighestLevelReached] = useState(0);
+  const [completedLevels, setCompletedLevels] = useState<Set<number>>(new Set());
   const [showCheckpointModal, setShowCheckpointModal] = useState(false);
   const [kitty, setKitty] = useState<Kitty>({ isSwallowed: false, segmentIndex: 0 });
 
-  // Load progress and settings from localStorage on mount
+  // Track if current level rewards were already given (prevent double-awarding)
+  const levelRewardsGivenRef = useRef(false);
+
+  // Load progress, settings, and currency from localStorage on mount
   useEffect(() => {
     // Load progress
     const savedProgress = localStorage.getItem(PROGRESS_KEY);
@@ -91,6 +103,28 @@ export default function App() {
         console.error('Failed to parse settings:', e);
       }
     }
+
+    // Load currency
+    const savedCurrency = localStorage.getItem(CURRENCY_KEY);
+    if (savedCurrency) {
+      try {
+        const parsedCurrency = JSON.parse(savedCurrency);
+        setCurrency(parsedCurrency);
+      } catch (e) {
+        console.error('Failed to parse currency:', e);
+      }
+    }
+
+    // Load completed levels
+    const savedCompleted = localStorage.getItem(COMPLETED_LEVELS_KEY);
+    if (savedCompleted) {
+      try {
+        const parsedCompleted = JSON.parse(savedCompleted);
+        setCompletedLevels(new Set(parsedCompleted));
+      } catch (e) {
+        console.error('Failed to parse completed levels:', e);
+      }
+    }
   }, []);
 
   // Save settings to localStorage when they change
@@ -98,11 +132,24 @@ export default function App() {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
   }, [settings]);
 
+  // Save currency to localStorage when it changes
+  useEffect(() => {
+    localStorage.setItem(CURRENCY_KEY, JSON.stringify(currency));
+  }, [currency]);
+
+  // Save completed levels to localStorage when they change
+  useEffect(() => {
+    localStorage.setItem(COMPLETED_LEVELS_KEY, JSON.stringify(Array.from(completedLevels)));
+  }, [completedLevels]);
+
   // Save progress to localStorage when highest level changes
+  // level = the level index just completed
+  // highestLevelReached = the next level to play (level + 1)
   const saveProgress = (level: number) => {
-    if (level > highestLevelReached) {
-      setHighestLevelReached(level);
-      localStorage.setItem(PROGRESS_KEY, level.toString());
+    const nextLevel = level + 1;
+    if (nextLevel > highestLevelReached) {
+      setHighestLevelReached(nextLevel);
+      localStorage.setItem(PROGRESS_KEY, nextLevel.toString());
     }
   };
 
@@ -115,14 +162,54 @@ export default function App() {
     return checkpoints;
   };
 
+  // Currency helper functions
+  const addCoins = (amount: number) => {
+    setCurrency(prev => ({ ...prev, coins: prev.coins + amount }));
+  };
+
+  const addGems = (amount: number) => {
+    setCurrency(prev => ({ ...prev, gems: prev.gems + amount }));
+  };
+
+  const spendCoins = (amount: number): boolean => {
+    if (currency.coins >= amount) {
+      setCurrency(prev => ({ ...prev, coins: prev.coins - amount }));
+      return true;
+    }
+    return false;
+  };
+
+  const spendGems = (amount: number): boolean => {
+    if (currency.gems >= amount) {
+      setCurrency(prev => ({ ...prev, gems: prev.gems - amount }));
+      return true;
+    }
+    return false;
+  };
+
   // Menu navigation handlers
   const handlePlay = () => {
+    // Start at the highest level reached (next level to play)
+    setLevelIndex(highestLevelReached);
     setCurrentScreen('playing');
-    startNewGame(true);
+    startNewGame(true, highestLevelReached);
   };
 
   const handleBackToMenu = () => {
     setCurrentScreen('menu');
+  };
+
+  const handleResetProgress = () => {
+    if (confirm('Are you sure you want to reset ALL progress? This will clear levels, currency, and settings. This cannot be undone!')) {
+      // Clear all localStorage
+      localStorage.removeItem(PROGRESS_KEY);
+      localStorage.removeItem(CURRENCY_KEY);
+      localStorage.removeItem(COMPLETED_LEVELS_KEY);
+      localStorage.removeItem(SETTINGS_KEY);
+
+      // Reload the page to reset all state
+      window.location.reload();
+    }
   };
 
   // Initialize 4 Spools (not 5 buffer slots!)
@@ -160,27 +247,32 @@ export default function App() {
     return getPathPosition(400); // At the end of the path
   };
 
-  const startNewGame = useCallback((useLevel: boolean = true) => {
+  const startNewGame = useCallback((useLevel: boolean = true, forceLevel?: number) => {
+    // Reset reward tracking for new level
+    levelRewardsGivenRef.current = false;
+
+    const currentLevel = forceLevel !== undefined ? forceLevel : levelIndex;
+
     let newBlocks: Block[];
     let newDragonColors: BlockColor[];
     let newConveyorCount = 5;
     let newGrowthInterval = 10000; // Default 10s for tutorial levels
 
-    if (useLevel && LEVELS[levelIndex]) {
+    if (useLevel && LEVELS[currentLevel]) {
       // Tutorial levels (0-4): Use manually designed levels
-      const levelData = loadLevel(LEVELS[levelIndex]);
+      const levelData = loadLevel(LEVELS[currentLevel]);
       newBlocks = levelData.blocks;
       newDragonColors = levelData.dragon;
-      newConveyorCount = LEVELS[levelIndex].conveyorCount;
+      newConveyorCount = LEVELS[currentLevel].conveyorCount;
 
       // Ramp up snake speed in tutorial levels (faster baseline to match 3x default)
       // Level 1-2: 8s, Level 3: 7s, Level 4: 6s, Level 5: 5s
       const tutorialSpeeds = [8000, 8000, 7000, 6000, 5000];
-      newGrowthInterval = tutorialSpeeds[levelIndex] || 6000;
+      newGrowthInterval = tutorialSpeeds[currentLevel] || 6000;
     } else {
       // Procedural levels (5+): Use progressive difficulty
-      const difficulty = getDifficultyForLevel(levelIndex);
-      console.log(`🎮 Level ${levelIndex + 1} - Difficulty:`, difficulty);
+      const difficulty = getDifficultyForLevel(currentLevel);
+      console.log(`🎮 Level ${currentLevel + 1} - Difficulty:`, difficulty);
 
       newBlocks = generateLevel(difficulty);
       newDragonColors = generateDragon(difficulty.initialDragonLength);
@@ -415,6 +507,11 @@ export default function App() {
 
             actuallyRemoved = removed;
 
+            // Award coins for segments removed (+10 each)
+            if (removed > 0) {
+              addCoins(removed * 10);
+            }
+
             // Play sound and haptics
             if (removed > 0) {
               playSound('pop');
@@ -422,9 +519,24 @@ export default function App() {
             }
 
             // Victory condition: All segments removed (only head remains)
-            if (newDragon.length === 1) {
+            if (newDragon.length === 1 && !levelRewardsGivenRef.current) {
               setGameState('won');
               playSound('win');
+
+              // Mark rewards as given for this level (prevent double-awarding)
+              levelRewardsGivenRef.current = true;
+
+              // Always award coins for completion
+              addCoins(50);
+
+              // Only award gems if this is a NEW completion (not replaying)
+              const isFirstTimeCompletion = !completedLevels.has(levelIndex);
+              if (isFirstTimeCompletion) {
+                addGems(5);
+                setCompletedLevels(prev => new Set(prev).add(levelIndex));
+              }
+
+              saveProgress(levelIndex);
             }
 
             return newDragon;
@@ -443,6 +555,7 @@ export default function App() {
             if (newIndex <= 0) {
               // Kitty escaped! Place it back at the end of the path
               console.log('🎉 Kitty escaped! Back at the end of the path');
+              // No gem reward here - only on level completion to prevent farming
               return {
                 ...prev,
                 isSwallowed: false,
@@ -740,6 +853,7 @@ export default function App() {
     return (
       <StartMenu
         currentLevel={levelIndex + 1}
+        currency={currency}
         onPlay={handlePlay}
         onDailyChallenge={() => setCurrentScreen('daily-challenge')}
         onShop={() => setCurrentScreen('shop')}
@@ -758,6 +872,7 @@ export default function App() {
         hapticsEnabled={settings.hapticsEnabled}
         onSoundToggle={() => setSettings(prev => ({ ...prev, soundEnabled: !prev.soundEnabled }))}
         onHapticsToggle={() => setSettings(prev => ({ ...prev, hapticsEnabled: !prev.hapticsEnabled }))}
+        onResetProgress={handleResetProgress}
         onClose={handleBackToMenu}
       />
     );
@@ -805,8 +920,12 @@ export default function App() {
               </span>
             </div>
             <div className="flex items-center gap-1">
-              <Trophy size={12} className="text-amber-500" />
-              <span className="text-xs font-bold text-slate-600">{score.toLocaleString()}</span>
+              <Coins size={12} className="text-amber-500" />
+              <span className="text-xs font-bold text-slate-600">{currency.coins.toLocaleString()}</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <Gem size={12} className="text-cyan-500" />
+              <span className="text-xs font-bold text-slate-600">{currency.gems.toLocaleString()}</span>
             </div>
           </div>
           <div className="flex gap-1.5">
@@ -881,7 +1000,7 @@ export default function App() {
              <div className="flex flex-col gap-3 w-full max-w-xs mx-auto">
                <button
                  onClick={() => {
-                   saveProgress(levelIndex); // Save progress before advancing
+                   // Rewards already given when level was won
                    setLevelIndex(prev => prev + 1);
                    startNewGame(true);
                  }}
