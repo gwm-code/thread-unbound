@@ -1,10 +1,8 @@
 import React from 'react';
-import { Play, ShoppingBag, Trophy, BarChart3, Settings, User, Coins, Gem } from 'lucide-react';
-import { PlayerCurrency } from '../types';
+import { Play, ShoppingBag, Trophy, BarChart3, Settings, User } from 'lucide-react';
 
 interface StartMenuProps {
   currentLevel: number;
-  currency: PlayerCurrency;
   onPlay: () => void;
   onDailyChallenge: () => void;
   onShop: () => void;
@@ -16,7 +14,6 @@ interface StartMenuProps {
 
 export const StartMenu: React.FC<StartMenuProps> = ({
   currentLevel,
-  currency,
   onPlay,
   onDailyChallenge,
   onShop,
@@ -27,39 +24,27 @@ export const StartMenu: React.FC<StartMenuProps> = ({
 }) => {
   // Unlock conditions based on ROADMAP.md
   const shopUnlocked = currentLevel >= 5;
-  const achievementsUnlocked = currentLevel >= 10;
+  const achievementsUnlocked = true; // Always unlocked - players can earn achievements from level 1
   const dailyChallengesUnlocked = currentLevel >= 15;
   const leaderboardsUnlocked = currentLevel >= 20;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex flex-col items-center justify-center p-4">
       {/* Game Title */}
-      <div className="text-center mb-8">
-        <h1 className="text-5xl md:text-6xl font-bold text-white mb-2 drop-shadow-lg">
+      <div className="text-center mb-6">
+        <h1 className="text-4xl md:text-5xl font-bold text-white mb-1 drop-shadow-lg">
           Thread Unbound
         </h1>
-        <p className="text-purple-200 text-sm md:text-base mb-3">
+        <p className="text-purple-200 text-sm md:text-base">
           Level {currentLevel}
         </p>
-
-        {/* Currency Display */}
-        <div className="flex items-center justify-center gap-4">
-          <div className="flex items-center gap-1.5 bg-white/10 backdrop-blur-sm px-3 py-1.5 rounded-lg">
-            <Coins className="w-4 h-4 text-amber-400" />
-            <span className="text-white font-bold">{currency.coins.toLocaleString()}</span>
-          </div>
-          <div className="flex items-center gap-1.5 bg-white/10 backdrop-blur-sm px-3 py-1.5 rounded-lg">
-            <Gem className="w-4 h-4 text-cyan-400" />
-            <span className="text-white font-bold">{currency.gems.toLocaleString()}</span>
-          </div>
-        </div>
       </div>
 
       {/* Menu Buttons */}
-      <div className="w-full max-w-md space-y-3">
+      <div className="w-full max-w-md space-y-2">
         {/* Play Button - Primary */}
         <MenuButton
-          icon={<Play className="w-6 h-6" />}
+          icon={<Play className="w-5 h-5" />}
           label="Play"
           onClick={onPlay}
           variant="primary"
@@ -67,7 +52,7 @@ export const StartMenu: React.FC<StartMenuProps> = ({
 
         {/* Daily Challenge */}
         <MenuButton
-          icon={<Trophy className="w-6 h-6" />}
+          icon={<Trophy className="w-5 h-5" />}
           label="Daily Challenge"
           onClick={onDailyChallenge}
           locked={!dailyChallengesUnlocked}
@@ -76,7 +61,7 @@ export const StartMenu: React.FC<StartMenuProps> = ({
 
         {/* Shop */}
         <MenuButton
-          icon={<ShoppingBag className="w-6 h-6" />}
+          icon={<ShoppingBag className="w-5 h-5" />}
           label="Shop"
           onClick={onShop}
           locked={!shopUnlocked}
@@ -85,16 +70,14 @@ export const StartMenu: React.FC<StartMenuProps> = ({
 
         {/* Achievements */}
         <MenuButton
-          icon={<Trophy className="w-6 h-6" />}
+          icon={<Trophy className="w-5 h-5" />}
           label="Achievements"
           onClick={onAchievements}
-          locked={!achievementsUnlocked}
-          unlockLevel={10}
         />
 
         {/* Leaderboards */}
         <MenuButton
-          icon={<BarChart3 className="w-6 h-6" />}
+          icon={<BarChart3 className="w-5 h-5" />}
           label="Leaderboards"
           onClick={onLeaderboards}
           locked={!leaderboardsUnlocked}
@@ -103,21 +86,21 @@ export const StartMenu: React.FC<StartMenuProps> = ({
 
         {/* Settings */}
         <MenuButton
-          icon={<Settings className="w-6 h-6" />}
+          icon={<Settings className="w-5 h-5" />}
           label="Settings"
           onClick={onSettings}
         />
 
         {/* Profile/Stats */}
         <MenuButton
-          icon={<User className="w-6 h-6" />}
+          icon={<User className="w-5 h-5" />}
           label="Profile & Stats"
           onClick={onProfile}
         />
       </div>
 
       {/* Footer */}
-      <div className="mt-8 text-purple-300 text-xs text-center">
+      <div className="mt-4 text-purple-300 text-xs text-center">
         v1.0.0
       </div>
     </div>
@@ -143,7 +126,7 @@ const MenuButton: React.FC<MenuButtonProps> = ({
 }) => {
   const isPrimary = variant === 'primary';
 
-  const baseClasses = "w-full h-16 rounded-xl font-bold text-lg flex items-center justify-center gap-3 transition-all duration-200 shadow-lg";
+  const baseClasses = "w-full h-14 rounded-xl font-bold text-base flex items-center justify-center gap-3 transition-all duration-200 shadow-lg";
 
   const variantClasses = locked
     ? "bg-slate-700 text-slate-500 cursor-not-allowed"

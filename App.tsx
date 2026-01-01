@@ -25,8 +25,10 @@ import { StartMenu } from './components/StartMenu';
 import { Settings } from './components/Settings';
 import { Shop } from './components/Shop';
 import { Profile } from './components/Profile';
+import { Achievements } from './components/Achievements';
 import { ComboIndicator } from './components/ComboIndicator';
 import { SHOP_ITEMS } from './data/shopItems';
+import { ACHIEVEMENTS, getActiveAchievements } from './data/achievements';
 
 // LocalStorage keys
 const PROGRESS_KEY = 'thread-unbound-progress';
@@ -142,6 +144,9 @@ export default function App() {
 
   // Track if kitty rescue was already counted this cycle
   const kittyRescueCountedRef = useRef(false);
+
+  // Track level start time for speedrunner achievement
+  const levelStartTimeRef = useRef<number>(0);
 
   // Load progress, settings, and currency from localStorage on mount
   useEffect(() => {
@@ -341,6 +346,8 @@ export default function App() {
   const spendGems = (amount: number): boolean => {
     if (currency.gems >= amount) {
       setCurrency(prev => ({ ...prev, gems: prev.gems - amount }));
+      // Track total gems spent for achievements
+      setStats(prev => ({ ...prev, totalGemsSpent: prev.totalGemsSpent + amount }));
       return true;
     }
     return false;
@@ -388,6 +395,131 @@ export default function App() {
 
     return finalAmount; // Return actual score added for potential feedback
   };
+
+  // Achievement checking and unlocking
+  const checkAndUnlockAchievements = useCallback(() => {
+    const activeAchievements = getActiveAchievements();
+    const newlyUnlocked: string[] = [];
+
+    activeAchievements.forEach(achievement => {
+      // Skip if already unlocked
+      if (achievements.unlocked.has(achievement.id)) return;
+
+      let currentProgress = 0;
+      let shouldUnlock = false;
+
+      // Check achievement conditions based on ID
+      switch (achievement.id) {
+        // PROGRESSION
+        case 'beginner':
+          currentProgress = stats.levelsCompleted;
+          shouldUnlock = currentProgress >= 5;
+          break;
+        case 'intermediate':
+          currentProgress = stats.levelsCompleted;
+          shouldUnlock = currentProgress >= 25;
+          break;
+        case 'expert':
+          currentProgress = stats.levelsCompleted;
+          shouldUnlock = currentProgress >= 50;
+          break;
+        case 'master':
+          currentProgress = stats.levelsCompleted;
+          shouldUnlock = currentProgress >= 100;
+          break;
+
+        // COMBAT
+        case 'dragon-slayer':
+          currentProgress = stats.totalSegmentsRemoved;
+          shouldUnlock = currentProgress >= 1000;
+          break;
+        case 'sharpshooter':
+          currentProgress = stats.segmentsRemovedWith10Count;
+          shouldUnlock = currentProgress >= 100;
+          break;
+        case 'speed-demon':
+          currentProgress = stats.maxSegmentsInOneTurn;
+          shouldUnlock = currentProgress >= 20;
+          break;
+        case 'combo-master':
+          currentProgress = stats.maxComboReached;
+          shouldUnlock = currentProgress >= 4;
+          break;
+
+        // COLLECTION
+        case 'coin-hoarder':
+          currentProgress = currency.coins;
+          shouldUnlock = currentProgress >= 5000;
+          break;
+        case 'gem-enthusiast':
+          currentProgress = stats.totalGemsSpent;
+          shouldUnlock = currentProgress >= 500;
+          break;
+
+        // SKILL
+        case 'perfectionist':
+          currentProgress = stats.perfectClears;
+          shouldUnlock = currentProgress >= 10;
+          break;
+        case 'no-mistakes':
+          currentProgress = stats.noUndoCompletions;
+          shouldUnlock = currentProgress >= 5;
+          break;
+        case 'speedrunner':
+          currentProgress = stats.fastestLevelTime;
+          shouldUnlock = currentProgress <= 60 && currentProgress > 0;
+          break;
+        case 'strategist':
+          currentProgress = stats.levelsCompletedUnder10Moves;
+          shouldUnlock = currentProgress >= 1;
+          break;
+
+        // HIDDEN
+        case 'kitty-guardian':
+          currentProgress = stats.kittiesRescued;
+          shouldUnlock = currentProgress >= 100;
+          break;
+        case 'rainbow-warrior':
+          // This will be checked manually during gameplay
+          currentProgress = achievements.progress[achievement.id] || 0;
+          shouldUnlock = currentProgress >= 1;
+          break;
+      }
+
+      // Update progress
+      setAchievements(prev => ({
+        ...prev,
+        progress: { ...prev.progress, [achievement.id]: currentProgress },
+      }));
+
+      // Unlock if condition met
+      if (shouldUnlock) {
+        newlyUnlocked.push(achievement.id);
+        setAchievements(prev => ({
+          ...prev,
+          unlocked: new Set([...prev.unlocked, achievement.id]),
+          recentlyUnlocked: [...prev.recentlyUnlocked, achievement.id],
+        }));
+
+        // Award rewards
+        if (achievement.rewardCoins) {
+          addCoins(achievement.rewardCoins);
+        }
+        if (achievement.rewardGems) {
+          addGems(achievement.rewardGems);
+        }
+
+        console.log(`🏆 Achievement Unlocked: ${achievement.name}`);
+      }
+    });
+
+    return newlyUnlocked;
+  }, [achievements, stats, currency, addCoins, addGems]);
+
+  // Check achievements whenever stats or currency change
+  useEffect(() => {
+    checkAndUnlockAchievements();
+  }, [stats, currency]);
 
   // Menu navigation handlers
   const handlePlay = () => {
@@ -545,6 +677,9 @@ export default function App() {
     levelRewardsGivenRef.current = false;
     levelAttemptCountedRef.current = false;
     kittyRescueCountedRef.current = false;
+
+    // Track level start time for speedrunner achievement
+    levelStartTimeRef.current = Date.now();
 
     const currentLevel = forceLevel !== undefined ? forceLevel : levelIndex;
 
@@ -827,7 +962,16 @@ export default function App() {
             if (removed > 0) {
               addCoins(removed * 10);
               // Track segments removed
-              setStats(prev => ({ ...prev, totalSegmentsRemoved: prev.totalSegmentsRemoved + removed }));
+              setStats(prev => ({
+                ...prev,
+                totalSegmentsRemoved: prev.totalSegmentsRemoved + removed,
+                // Track segments removed with 10-count blocks
+                segmentsRemovedWith10Count: threadCount === 10
+                  ? prev.segmentsRemovedWith10Count + removed
+                  : prev.segmentsRemovedWith10Count,
+                // Track max segments in one turn
+                maxSegmentsInOneTurn: Math.max(prev.maxSegmentsInOneTurn, removed)
+              }));
             }
 
             // Play sound and haptics
@@ -857,19 +1001,42 @@ export default function App() {
                 setCompletedLevels(prev => new Set(prev).add(levelIndex));
               }
 
-              // Award bonus scores
+              // Award bonus scores and track achievement stats
               let bonusesAwarded: string[] = [];
 
               // Perfect Clear Bonus: Cleared entire grid
               if (blocks.length === 0) {
                 addScore(500, false); // Flat bonus, no combo multiplier
                 bonusesAwarded.push('Perfect Clear +500');
+                setStats(prev => ({ ...prev, perfectClears: prev.perfectClears + 1 }));
               }
 
               // No Undo Bonus: Completed without using undo
               if (!usedUndo) {
                 addScore(200, false);
                 bonusesAwarded.push('No Undo +200');
+                setStats(prev => ({ ...prev, noUndoCompletions: prev.noUndoCompletions + 1 }));
+              }
+
+              // Track max combo reached
+              const currentCombo = getComboMultiplier();
+              setStats(prev => ({
+                ...prev,
+                maxComboReached: Math.max(prev.maxComboReached, currentCombo)
+              }));
+
+              // Track level completion with <10 moves
+              if (moveCount > 0 && moveCount < 10) {
+                setStats(prev => ({ ...prev, levelsCompletedUnder10Moves: prev.levelsCompletedUnder10Moves + 1 }));
+              }
+
+              // Track fastest level completion time (for speedrunner achievement)
+              if (levelStartTimeRef.current > 0) {
+                const levelTime = Math.floor((Date.now() - levelStartTimeRef.current) / 1000);
+                setStats(prev => ({
+                  ...prev,
+                  fastestLevelTime: Math.min(prev.fastestLevelTime, levelTime)
+                }));
               }
 
               // Log bonuses for debugging
@@ -1226,7 +1393,6 @@ export default function App() {
     return (
       <StartMenu
         currentLevel={levelIndex + 1}
-        currency={currency}
         onPlay={handlePlay}
         onDailyChallenge={() => setCurrentScreen('daily-challenge')}
         onShop={() => setCurrentScreen('shop')}
@@ -1272,8 +1438,19 @@ export default function App() {
     );
   }
 
+  if (currentScreen === 'achievements') {
+    return (
+      <Achievements
+        achievements={achievements}
+        stats={stats}
+        currency={currency}
+        onClose={handleBackToMenu}
+      />
+    );
+  }
+
   // Placeholder screens for future features
-  if (currentScreen === 'achievements' || currentScreen === 'leaderboards' || currentScreen === 'daily-challenge') {
+  if (currentScreen === 'leaderboards' || currentScreen === 'daily-challenge') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex flex-col items-center justify-center p-4">
         <div className="text-center text-white">
@@ -1388,13 +1565,48 @@ export default function App() {
       {/* WIN OVERLAY */}
       {gameState === 'won' && (
         <div className="absolute inset-0 bg-white/95 backdrop-blur-md z-50 flex items-center justify-center p-6 animate-in fade-in zoom-in duration-300">
-           <div className="text-center">
+           <div className="text-center max-w-lg mx-auto">
              <div className="text-6xl mb-6 animate-bounce">🏆</div>
              <h2 className="text-4xl font-bold text-slate-800 mb-2">Safe & Sound!</h2>
-             <p className="text-slate-600 mb-8 font-medium">You saved the Kitty!</p>
+             <p className="text-slate-600 mb-6 font-medium">You saved the Kitty!</p>
+
+             {/* Achievement Unlocks */}
+             {achievements.recentlyUnlocked.length > 0 && (
+               <div className="mb-6 space-y-3">
+                 <h3 className="text-lg font-bold text-yellow-600 flex items-center justify-center gap-2">
+                   <span>🏆</span> Achievements Unlocked! <span>🏆</span>
+                 </h3>
+                 <div className="space-y-2 max-h-60 overflow-y-auto">
+                   {achievements.recentlyUnlocked.map(id => {
+                     const achievement = ACHIEVEMENTS.find(a => a.id === id);
+                     if (!achievement) return null;
+                     return (
+                       <div key={id} className="bg-gradient-to-r from-yellow-100 to-amber-100 rounded-lg p-3 border-2 border-yellow-300 shadow-md">
+                         <div className="flex items-center gap-3">
+                           <div className="text-3xl">{achievement.icon}</div>
+                           <div className="flex-1 text-left">
+                             <div className="font-bold text-slate-800">{achievement.name}</div>
+                             <div className="text-sm text-slate-600">{achievement.description}</div>
+                             {(achievement.rewardCoins || achievement.rewardGems) && (
+                               <div className="flex gap-2 text-xs font-medium text-slate-700 mt-1">
+                                 {achievement.rewardCoins && <span>💰 +{achievement.rewardCoins}</span>}
+                                 {achievement.rewardGems && <span>💎 +{achievement.rewardGems}</span>}
+                               </div>
+                             )}
+                           </div>
+                         </div>
+                       </div>
+                     );
+                   })}
+                 </div>
+               </div>
+             )}
+
              <div className="flex flex-col gap-3 w-full max-w-xs mx-auto">
                <button
                  onClick={() => {
+                   // Clear achievement notifications
+                   setAchievements(prev => ({ ...prev, recentlyUnlocked: [] }));
                    // Rewards already given when level was won
                    setLevelIndex(prev => prev + 1);
                    startNewGame(true);
@@ -1404,13 +1616,21 @@ export default function App() {
                  Next Level
                </button>
                <button
-                 onClick={() => startNewGame(true)}
+                 onClick={() => {
+                   // Clear achievement notifications
+                   setAchievements(prev => ({ ...prev, recentlyUnlocked: [] }));
+                   startNewGame(true);
+                 }}
                  className="w-full py-3 bg-white text-slate-600 font-bold rounded-xl border-2 border-slate-200 hover:bg-slate-50 active:scale-95 transition-all"
                >
                  Replay
                </button>
                <button
-                 onClick={handleBackToMenu}
+                 onClick={() => {
+                   // Clear achievement notifications
+                   setAchievements(prev => ({ ...prev, recentlyUnlocked: [] }));
+                   handleBackToMenu();
+                 }}
                  className="w-full py-2 bg-slate-100 text-slate-600 font-medium rounded-xl hover:bg-slate-200 active:scale-95 transition-all"
                >
                  Menu
