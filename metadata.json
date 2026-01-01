@@ -1,0 +1,5 @@
+{
+  "name": "Thread Unbound",
+  "description": "A spatial puzzle game where you unthread blocks from a grid into a matching buffer.",
+  "requestFramePermissions": []
+}
