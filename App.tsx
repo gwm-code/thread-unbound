@@ -25,6 +25,7 @@ import { StartMenu } from './components/StartMenu';
 import { Settings } from './components/Settings';
 import { Shop } from './components/Shop';
 import { Profile } from './components/Profile';
+import { ComboIndicator } from './components/ComboIndicator';
 import { SHOP_ITEMS } from './data/shopItems';
 
 // LocalStorage keys
@@ -101,6 +102,12 @@ export default function App() {
   const [score, setScore] = useState(0);
   const [activeThreads, setActiveThreads] = useState<Thread[]>([]);
   const [levelIndex, setLevelIndex] = useState(0);
+
+  // Combo system
+  const [comboCount, setComboCount] = useState(0);
+  const [lastActionTime, setLastActionTime] = useState<number>(0);
+  const [moveCount, setMoveCount] = useState(0);
+  const [usedUndo, setUsedUndo] = useState(false);
   const [history, setHistory] = useState<HistoryState[]>([]);
   const [selectedKey, setSelectedKey] = useState<Block | null>(null);
   const [dragonGrowthInterval, setDragonGrowthInterval] = useState(10000);
@@ -286,16 +293,47 @@ export default function App() {
     return false;
   };
 
+  // Register combo action (call this whenever player performs a scoring action)
+  const registerComboAction = () => {
+    const now = Date.now();
+    const timeSinceLastAction = now - lastActionTime;
+
+    if (timeSinceLastAction < 3000 && lastActionTime > 0) {
+      // Continue combo - increment count
+      setComboCount(prev => Math.min(prev + 1, 4)); // Cap at 4x
+    } else {
+      // Start new combo
+      setComboCount(1);
+    }
+
+    setLastActionTime(now);
+  };
+
+  // Get current combo multiplier (1x, 2x, 3x, 4x)
+  const getComboMultiplier = (): number => {
+    if (comboCount <= 1) return 1;
+    if (comboCount === 2) return 2;
+    if (comboCount === 3) return 3;
+    return 4; // comboCount >= 4
+  };
+
   // Score helper with multiplier
-  const addScore = (amount: number) => {
-    // Apply score multiplier bonus
+  const addScore = (amount: number, applyCombo: boolean = true) => {
+    // Apply score multiplier bonus from inventory
     let multiplier = 1;
     if (inventory.scoreMultiplierLevel === 1) multiplier = 1.1;  // +10%
     if (inventory.scoreMultiplierLevel === 2) multiplier = 1.25; // +25%
     if (inventory.scoreMultiplierLevel === 3) multiplier = 1.5;  // +50%
 
+    // Apply combo multiplier
+    if (applyCombo) {
+      multiplier *= getComboMultiplier();
+    }
+
     const finalAmount = Math.floor(amount * multiplier);
     setScore(prev => prev + finalAmount);
+
+    return finalAmount; // Return actual score added for potential feedback
   };
 
   // Menu navigation handlers
@@ -502,6 +540,10 @@ export default function App() {
     setActiveThreads([]);
     setGameState('playing');
     setScore(0);
+    setComboCount(0);
+    setLastActionTime(0);
+    setMoveCount(0);
+    setUsedUndo(false);
     setSelectedKey(null);
     setDragonGrowthInterval(newGrowthInterval);
     setKitty({ isSwallowed: false, segmentIndex: 0 }); // Reset kitty to end of path
@@ -762,6 +804,26 @@ export default function App() {
                 setCompletedLevels(prev => new Set(prev).add(levelIndex));
               }
 
+              // Award bonus scores
+              let bonusesAwarded: string[] = [];
+
+              // Perfect Clear Bonus: Cleared entire grid
+              if (blocks.length === 0) {
+                addScore(500, false); // Flat bonus, no combo multiplier
+                bonusesAwarded.push('Perfect Clear +500');
+              }
+
+              // No Undo Bonus: Completed without using undo
+              if (!usedUndo) {
+                addScore(200, false);
+                bonusesAwarded.push('No Undo +200');
+              }
+
+              // Log bonuses for debugging
+              if (bonusesAwarded.length > 0) {
+                console.log('🎉 Bonuses awarded:', bonusesAwarded);
+              }
+
               saveProgress(levelIndex);
             }
 
@@ -820,7 +882,8 @@ export default function App() {
             return newSpools;
           });
 
-          // Add score based on segments actually removed (with multiplier)
+          // Register combo action and add score
+          registerComboAction();
           addScore(segmentsToRemove * 10);
         }
       }
@@ -854,6 +917,7 @@ export default function App() {
       setStats(prev => ({ ...prev, levelsAttempted: prev.levelsAttempted + 1 }));
     }
 
+    setUsedUndo(true); // Track undo usage for "No Undo" bonus
     playSound('undo');
     triggerHaptic(15);
     const previousState = history[history.length - 1];
@@ -967,6 +1031,7 @@ export default function App() {
       const targetY = randomSpot.y;
 
       pushHistory();
+      setMoveCount(prev => prev + 1); // Track move for efficiency bonus
       playSound('move');
       // Hide the clicked block but keep it in array to maintain spacing
       setHiddenConveyorIds(prev => new Set(prev).add(block.id));
@@ -1048,6 +1113,7 @@ export default function App() {
     }
 
     pushHistory();
+    setMoveCount(prev => prev + 1); // Track move for efficiency bonus
     playSound('move');
     triggerHaptic(10);
 
@@ -1098,6 +1164,7 @@ export default function App() {
        }
        return newDragon;
     });
+    registerComboAction();
     addScore(100);
   };
 
@@ -1174,7 +1241,8 @@ export default function App() {
   return (
     <div className="min-h-screen bg-game-bg flex flex-col font-sans relative overflow-hidden select-none">
       <ThreadConnection activeThreads={activeThreads} />
-      
+      <ComboIndicator comboCount={comboCount} multiplier={getComboMultiplier()} />
+
       {/* Compact Header */}
       <header className="px-3 py-2 bg-white shadow-sm z-30 relative">
         <div className="flex justify-between items-center">
