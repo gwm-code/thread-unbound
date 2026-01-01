@@ -852,7 +852,7 @@ export default function App() {
   // --- SURVIVAL CLOCK ---
   // Adds segment at dynamic interval (faster on harder levels + speed multiplier + aggro effect)
   useEffect(() => {
-    if (gameState !== 'playing') return;
+    if (currentScreen !== 'playing' || gameState !== 'playing') return;
 
     // Apply both speed multiplier AND aggro effect (multiplicative)
     let effectiveMultiplier = speedMultiplier;
@@ -910,12 +910,12 @@ export default function App() {
     }, adjustedInterval);
 
     return () => clearInterval(interval);
-  }, [gameState, dragonGrowthInterval, speedMultiplier, aggroEffectActive]);
+  }, [currentScreen, gameState, dragonGrowthInterval, speedMultiplier, aggroEffectActive]);
 
   // --- SWALLOWING CHECK ---
   // Check if dragon head has reached kitty position (end of path)
   useEffect(() => {
-    if (gameState !== 'playing' || kitty.isSwallowed) return;
+    if (currentScreen !== 'playing' || gameState !== 'playing' || kitty.isSwallowed) return;
 
     const headPos = getDragonHeadPosition(dragon.length);
     const kittyPos = getKittyPathPosition(); // Kitty is at end of path
@@ -929,11 +929,11 @@ export default function App() {
       setKitty({ ...kitty, isSwallowed: true, segmentIndex: 0 });
       playSound('error'); // Uh oh sound
     }
-  }, [dragon.length, kitty.isSwallowed, gameState]);
+  }, [currentScreen, dragon.length, kitty.isSwallowed, gameState]);
 
   // --- GAME OVER CHECK: Kitty at tail ---
   useEffect(() => {
-    if (gameState !== 'playing') return;
+    if (currentScreen !== 'playing' || gameState !== 'playing') return;
 
     if (kitty.isSwallowed && kitty.segmentIndex >= dragon.length - 1) {
       // Kitty has reached the tail - fully swallowed!
@@ -941,12 +941,12 @@ export default function App() {
       setGameState('game_over');
       playSound('error');
     }
-  }, [kitty, dragon.length, gameState]);
+  }, [currentScreen, kitty, dragon.length, gameState]);
 
   // --- AGGRO TILE DRAGON SPITTING ---
   // When dragon is under 5 segments for 15 seconds, spit out an Aggro tile (30s cooldown)
   useEffect(() => {
-    if (gameState !== 'playing') return;
+    if (currentScreen !== 'playing' || gameState !== 'playing') return;
 
     const currentTime = Date.now();
     const dragonLength = dragon.length - 1; // Exclude head
@@ -1001,14 +1001,14 @@ export default function App() {
         setDragonUnder5StartTime(0);
       }
     }
-  }, [dragon.length, gameState, dragonUnder5StartTime, lastAggroSpitTime, blocks]);
+  }, [currentScreen, dragon.length, gameState, dragonUnder5StartTime, lastAggroSpitTime, blocks]);
 
   // --- AUTO-FIRE MECHANISM ---
   // Check if snake head color matches any spool, then fire automatically
   // Use a slight delay to allow visual feedback
   // IMPORTANT: Only fire ONE spool per auto-fire check to prevent double-firing
   useEffect(() => {
-    if (gameState !== 'playing' || dragon.length === 0) return;
+    if (currentScreen !== 'playing' || gameState !== 'playing' || dragon.length === 0) return;
 
     // Delay check slightly to allow spools to be visible
     const timer = setTimeout(() => {
@@ -1266,7 +1266,7 @@ export default function App() {
     }, 600); // 600ms delay to allow visual feedback
 
     return () => clearTimeout(timer);
-  }, [dragon, spools, gameState, initialDragonSize]);
+  }, [currentScreen, dragon, spools, gameState, initialDragonSize]);
 
 
   const pushHistory = () => {
