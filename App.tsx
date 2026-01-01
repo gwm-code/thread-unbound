@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { RefreshCw, Play, Info, RotateCcw, Shuffle, Trophy, XCircle, Clock, Map, Coins, Gem } from 'lucide-react';
 // Toast removed - no longer needed
-import { Block, Spool, BlockColor, Thread, GameState, DragonSegment, Kitty, PlayerCurrency, PlayerInventory } from './types';
+import { Block, Spool, BlockColor, Thread, GameState, DragonSegment, Kitty, PlayerCurrency, PlayerInventory, PlayerStats } from './types';
 import {
   GRID_SIZE,
   generateLevel,
@@ -24,6 +24,7 @@ import { ConveyorBelt } from './components/ConveyorBelt';
 import { StartMenu } from './components/StartMenu';
 import { Settings } from './components/Settings';
 import { Shop } from './components/Shop';
+import { Profile } from './components/Profile';
 import { SHOP_ITEMS } from './data/shopItems';
 
 // LocalStorage keys
@@ -32,6 +33,7 @@ const SETTINGS_KEY = 'thread-unbound-settings';
 const CURRENCY_KEY = 'thread-unbound-currency';
 const COMPLETED_LEVELS_KEY = 'thread-unbound-completed-levels';
 const INVENTORY_KEY = 'thread-unbound-inventory';
+const STATS_KEY = 'thread-unbound-stats';
 
 type Screen = 'menu' | 'playing' | 'settings' | 'shop' | 'achievements' | 'leaderboards' | 'profile' | 'daily-challenge';
 
@@ -76,6 +78,18 @@ export default function App() {
     hasCoinMagnet: false,
   });
 
+  // Stats
+  const [stats, setStats] = useState<PlayerStats>({
+    totalPlayTimeSeconds: 0,
+    sessionStartTime: Date.now(),
+    levelsCompleted: 0,
+    levelsAttempted: 0,
+    totalCoinsEarned: 0,
+    totalGemsEarned: 0,
+    totalSegmentsRemoved: 0,
+    kittiesRescued: 0,
+  });
+
   // Game state
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [conveyorBlocks, setConveyorBlocks] = useState<Block[]>([]);
@@ -98,6 +112,12 @@ export default function App() {
 
   // Track if current level rewards were already given (prevent double-awarding)
   const levelRewardsGivenRef = useRef(false);
+
+  // Track if current level has already been counted as "attempted"
+  const levelAttemptCountedRef = useRef(false);
+
+  // Track if kitty rescue was already counted this cycle
+  const kittyRescueCountedRef = useRef(false);
 
   // Load progress, settings, and currency from localStorage on mount
   useEffect(() => {
@@ -151,6 +171,26 @@ export default function App() {
         console.error('Failed to parse inventory:', e);
       }
     }
+
+    // Load stats
+    const savedStats = localStorage.getItem(STATS_KEY);
+    if (savedStats) {
+      try {
+        const parsedStats = JSON.parse(savedStats);
+
+        // Migration: Fix levelsAttempted if it's less than levelsCompleted
+        // (This can happen if stats were tracked before levelsAttempted was implemented)
+        const fixedStats = {
+          ...parsedStats,
+          sessionStartTime: Date.now(),
+          levelsAttempted: Math.max(parsedStats.levelsAttempted || 0, parsedStats.levelsCompleted || 0)
+        };
+
+        setStats(fixedStats);
+      } catch (e) {
+        console.error('Failed to parse stats:', e);
+      }
+    }
   }, []);
 
   // Save settings to localStorage when they change
@@ -172,6 +212,25 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem(INVENTORY_KEY, JSON.stringify(inventory));
   }, [inventory]);
+
+  // Save stats to localStorage when they change
+  useEffect(() => {
+    localStorage.setItem(STATS_KEY, JSON.stringify(stats));
+  }, [stats]);
+
+  // Track play time (update every 10 seconds while playing)
+  useEffect(() => {
+    if (currentScreen !== 'playing' || gameState !== 'playing') return;
+
+    const interval = setInterval(() => {
+      setStats(prev => ({
+        ...prev,
+        totalPlayTimeSeconds: prev.totalPlayTimeSeconds + 10,
+      }));
+    }, 10000); // Every 10 seconds
+
+    return () => clearInterval(interval);
+  }, [currentScreen, gameState]);
 
   // Save progress to localStorage when highest level changes
   // level = the level index just completed
@@ -199,10 +258,16 @@ export default function App() {
     const bonusMultiplier = inventory.hasCoinMagnet ? 1.25 : 1;
     const finalAmount = Math.floor(amount * bonusMultiplier);
     setCurrency(prev => ({ ...prev, coins: prev.coins + finalAmount }));
+
+    // Track total coins earned
+    setStats(prev => ({ ...prev, totalCoinsEarned: prev.totalCoinsEarned + finalAmount }));
   };
 
   const addGems = (amount: number) => {
     setCurrency(prev => ({ ...prev, gems: prev.gems + amount }));
+
+    // Track total gems earned
+    setStats(prev => ({ ...prev, totalGemsEarned: prev.totalGemsEarned + amount }));
   };
 
   const spendCoins = (amount: number): boolean => {
@@ -385,8 +450,10 @@ export default function App() {
   };
 
   const startNewGame = useCallback((useLevel: boolean = true, forceLevel?: number) => {
-    // Reset reward tracking for new level
+    // Reset tracking flags for new level
     levelRewardsGivenRef.current = false;
+    levelAttemptCountedRef.current = false;
+    kittyRescueCountedRef.current = false;
 
     const currentLevel = forceLevel !== undefined ? forceLevel : levelIndex;
 
@@ -438,6 +505,8 @@ export default function App() {
     setSelectedKey(null);
     setDragonGrowthInterval(newGrowthInterval);
     setKitty({ isSwallowed: false, segmentIndex: 0 }); // Reset kitty to end of path
+
+    // Note: levelsAttempted is tracked on first player action, not on level load
 
     // Starting Undo upgrade: Give 1 undo at start
     if (inventory.hasStartingUndo) {
@@ -662,6 +731,8 @@ export default function App() {
             // Award coins for segments removed (+10 each)
             if (removed > 0) {
               addCoins(removed * 10);
+              // Track segments removed
+              setStats(prev => ({ ...prev, totalSegmentsRemoved: prev.totalSegmentsRemoved + removed }));
             }
 
             // Play sound and haptics
@@ -677,6 +748,9 @@ export default function App() {
 
               // Mark rewards as given for this level (prevent double-awarding)
               levelRewardsGivenRef.current = true;
+
+              // Track level completion
+              setStats(prev => ({ ...prev, levelsCompleted: prev.levelsCompleted + 1 }));
 
               // Always award coins for completion
               addCoins(50);
@@ -707,6 +781,13 @@ export default function App() {
             if (newIndex <= 0) {
               // Kitty escaped! Place it back at the end of the path
               console.log('🎉 Kitty escaped! Back at the end of the path');
+
+              // Track kitty rescue (only once per rescue)
+              if (!kittyRescueCountedRef.current) {
+                kittyRescueCountedRef.current = true;
+                setStats(prevStats => ({ ...prevStats, kittiesRescued: prevStats.kittiesRescued + 1 }));
+              }
+
               // No gem reward here - only on level completion to prevent farming
               return {
                 ...prev,
@@ -766,6 +847,13 @@ export default function App() {
 
   const handleUndo = () => {
     if (history.length === 0 || gameState !== 'playing') return;
+
+    // Track level attempt on first player action
+    if (!levelAttemptCountedRef.current) {
+      levelAttemptCountedRef.current = true;
+      setStats(prev => ({ ...prev, levelsAttempted: prev.levelsAttempted + 1 }));
+    }
+
     playSound('undo');
     triggerHaptic(15);
     const previousState = history[history.length - 1];
@@ -780,6 +868,13 @@ export default function App() {
 
   const handleShuffle = () => {
     if (gameState !== 'playing') return;
+
+    // Track level attempt on first player action
+    if (!levelAttemptCountedRef.current) {
+      levelAttemptCountedRef.current = true;
+      setStats(prev => ({ ...prev, levelsAttempted: prev.levelsAttempted + 1 }));
+    }
+
     pushHistory();
     playSound('shuffle');
     triggerHaptic([10, 10, 10]);
@@ -818,6 +913,12 @@ export default function App() {
 
   const handleBlockClick = (block: Block, source: 'grid' | 'conveyor') => {
     if (gameState !== 'playing') return;
+
+    // Track level attempt on first player action
+    if (!levelAttemptCountedRef.current) {
+      levelAttemptCountedRef.current = true;
+      setStats(prev => ({ ...prev, levelsAttempted: prev.levelsAttempted + 1 }));
+    }
 
     // --- KEY BLOCK SPECIAL LOGIC (from grid only) ---
     if (source === 'grid' && block.type === 'key') {
@@ -1041,8 +1142,18 @@ export default function App() {
     );
   }
 
+  if (currentScreen === 'profile') {
+    return (
+      <Profile
+        stats={stats}
+        currency={currency}
+        onClose={handleBackToMenu}
+      />
+    );
+  }
+
   // Placeholder screens for future features
-  if (currentScreen === 'achievements' || currentScreen === 'leaderboards' || currentScreen === 'profile' || currentScreen === 'daily-challenge') {
+  if (currentScreen === 'achievements' || currentScreen === 'leaderboards' || currentScreen === 'daily-challenge') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex flex-col items-center justify-center p-4">
         <div className="text-center text-white">

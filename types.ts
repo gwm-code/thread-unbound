@@ -91,3 +91,23 @@ export interface PlayerInventory {
   hasSpoolUpgrade: boolean; // 5 spools instead of 4
   hasCoinMagnet: boolean; // +25% coins
 }
+
+export interface PlayerStats {
+  // Play time
+  totalPlayTimeSeconds: number;
+  sessionStartTime: number; // Timestamp when current session started
+
+  // Level progress
+  levelsCompleted: number;
+  levelsAttempted: number;
+
+  // Currency earned (lifetime totals)
+  totalCoinsEarned: number;
+  totalGemsEarned: number;
+
+  // Dragon segments
+  totalSegmentsRemoved: number;
+
+  // Kitty rescues
+  kittiesRescued: number;
+}
