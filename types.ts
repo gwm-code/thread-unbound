@@ -110,4 +110,39 @@ export interface PlayerStats {
 
   // Kitty rescues
   kittiesRescued: number;
+
+  // Achievement tracking (additional stats for achievements)
+  perfectClears: number; // Perfect Clear bonus awarded count
+  noUndoCompletions: number; // Levels completed without undo
+  maxComboReached: number; // Highest combo multiplier achieved
+  segmentsRemovedWith10Count: number; // Segments removed using 10-count blocks
+  maxSegmentsInOneTurn: number; // Highest segments removed in single turn
+  totalGemsSpent: number; // Total gems spent (for Gem Enthusiast achievement)
+  fastestLevelTime: number; // Fastest level completion in seconds
+  levelsCompletedUnder10Moves: number; // Levels completed with <10 moves
+}
+
+export type AchievementCategory = 'progression' | 'combat' | 'collection' | 'skill' | 'hidden';
+
+export interface Achievement {
+  id: string;
+  name: string;
+  description: string;
+  icon: string; // Emoji
+  category: AchievementCategory;
+  requirement: number; // Target value to unlock
+  requirementText: string; // e.g., "Reach Level 5", "Remove 1,000 segments"
+  rewardCoins?: number; // Optional coin reward
+  rewardGems?: number; // Optional gem reward
+  hidden?: boolean; // Hidden achievements don't show until unlocked
+  comingSoon?: boolean; // Features not yet implemented
+}
+
+export interface PlayerAchievements {
+  // Map of achievement ID to progress value
+  progress: Record<string, number>;
+  // Set of unlocked achievement IDs
+  unlocked: Set<string>;
+  // Track newly unlocked (for notifications)
+  recentlyUnlocked: string[];
 }

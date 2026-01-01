@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { RefreshCw, Play, Info, RotateCcw, Shuffle, Trophy, XCircle, Clock, Map, Coins, Gem } from 'lucide-react';
 // Toast removed - no longer needed
-import { Block, Spool, BlockColor, Thread, GameState, DragonSegment, Kitty, PlayerCurrency, PlayerInventory, PlayerStats } from './types';
+import { Block, Spool, BlockColor, Thread, GameState, DragonSegment, Kitty, PlayerCurrency, PlayerInventory, PlayerStats, PlayerAchievements } from './types';
 import {
   GRID_SIZE,
   generateLevel,
@@ -35,6 +35,7 @@ const CURRENCY_KEY = 'thread-unbound-currency';
 const COMPLETED_LEVELS_KEY = 'thread-unbound-completed-levels';
 const INVENTORY_KEY = 'thread-unbound-inventory';
 const STATS_KEY = 'thread-unbound-stats';
+const ACHIEVEMENTS_KEY = 'thread-unbound-achievements';
 
 type Screen = 'menu' | 'playing' | 'settings' | 'shop' | 'achievements' | 'leaderboards' | 'profile' | 'daily-challenge';
 
@@ -89,6 +90,22 @@ export default function App() {
     totalGemsEarned: 0,
     totalSegmentsRemoved: 0,
     kittiesRescued: 0,
+    // Achievement tracking stats
+    perfectClears: 0,
+    noUndoCompletions: 0,
+    maxComboReached: 0,
+    segmentsRemovedWith10Count: 0,
+    maxSegmentsInOneTurn: 0,
+    totalGemsSpent: 0,
+    fastestLevelTime: Infinity,
+    levelsCompletedUnder10Moves: 0,
+  });
+
+  // Achievements
+  const [achievements, setAchievements] = useState<PlayerAchievements>({
+    progress: {},
+    unlocked: new Set(),
+    recentlyUnlocked: [],
   });
 
   // Game state
@@ -187,15 +204,41 @@ export default function App() {
 
         // Migration: Fix levelsAttempted if it's less than levelsCompleted
         // (This can happen if stats were tracked before levelsAttempted was implemented)
+        // Also add new achievement tracking fields if they don't exist
         const fixedStats = {
           ...parsedStats,
           sessionStartTime: Date.now(),
-          levelsAttempted: Math.max(parsedStats.levelsAttempted || 0, parsedStats.levelsCompleted || 0)
+          levelsAttempted: Math.max(parsedStats.levelsAttempted || 0, parsedStats.levelsCompleted || 0),
+          // Add achievement tracking fields with defaults
+          perfectClears: parsedStats.perfectClears || 0,
+          noUndoCompletions: parsedStats.noUndoCompletions || 0,
+          maxComboReached: parsedStats.maxComboReached || 0,
+          segmentsRemovedWith10Count: parsedStats.segmentsRemovedWith10Count || 0,
+          maxSegmentsInOneTurn: parsedStats.maxSegmentsInOneTurn || 0,
+          totalGemsSpent: parsedStats.totalGemsSpent || 0,
+          fastestLevelTime: parsedStats.fastestLevelTime || Infinity,
+          levelsCompletedUnder10Moves: parsedStats.levelsCompletedUnder10Moves || 0,
         };
 
         setStats(fixedStats);
       } catch (e) {
         console.error('Failed to parse stats:', e);
+      }
+    }
+
+    // Load achievements
+    const savedAchievements = localStorage.getItem(ACHIEVEMENTS_KEY);
+    if (savedAchievements) {
+      try {
+        const parsedAchievements = JSON.parse(savedAchievements);
+        // Convert unlocked array to Set (localStorage can't store Sets directly)
+        setAchievements({
+          ...parsedAchievements,
+          unlocked: new Set(parsedAchievements.unlocked || []),
+          recentlyUnlocked: [], // Always clear recent on load
+        });
+      } catch (e) {
+        console.error('Failed to parse achievements:', e);
       }
     }
   }, []);
@@ -224,6 +267,16 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem(STATS_KEY, JSON.stringify(stats));
   }, [stats]);
+
+  // Save achievements to localStorage when they change
+  useEffect(() => {
+    // Convert Set to Array for JSON serialization
+    const achievementsToSave = {
+      ...achievements,
+      unlocked: Array.from(achievements.unlocked),
+    };
+    localStorage.setItem(ACHIEVEMENTS_KEY, JSON.stringify(achievementsToSave));
+  }, [achievements]);
 
   // Track play time (update every 10 seconds while playing)
   useEffect(() => {
