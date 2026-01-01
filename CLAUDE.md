@@ -161,6 +161,85 @@ Note: Currently loaded in `vite.config.ts` but not actively used by game logic.
 - **Touch-Optimized**: 48x48px minimum touch targets, translucent overlays
 - **No Toasts**: All popup notifications removed for cleaner mobile experience
 
+## Meta-Progression Systems (January 2025)
+
+### Currency System
+- **Sumo Coins**: Primary currency earned from level completion (+50) and segment removal (+10 per segment)
+- **Thread Gems**: Premium currency earned from first-time level completions (+5 per level)
+- **Coin Magnet Upgrade**: +25% bonus to all coin earnings when purchased
+- All currency persists to localStorage
+
+### Shop System (`components/Shop.tsx`)
+**Consumables** (can purchase multiple):
+- Extra Undo (50 coins): +1 undo for current level
+- Freeze Time (100 coins): Freeze dragon for 10 seconds
+- Conveyor Speed (50 coins): 2x conveyor speed
+- Reroll Grid (100 coins): Regenerate grid (keeps score/dragon)
+
+**Permanent Upgrades** (one-time purchases):
+- Score Multiplier I/II/III (500/1000/2000 coins): +10%/+25%/+50% all scores
+- Starting Undo (300 coins): Start each level with 1 undo
+- Spool Upgrade (1500 coins): 5 spools instead of 4
+- Coin Magnet (600 coins): +25% coin earnings
+
+### Statistics Tracking (`types.ts`: PlayerStats)
+Tracks and persists:
+- Total play time (increments every 10 seconds during gameplay)
+- Levels completed and attempted
+- Total coins and gems earned (lifetime)
+- Total segments removed
+- Kitties rescued (when kitty escapes from dragon)
+- Derived stats: Win rate, average coins/level, average segments/level
+
+### Profile Page (`components/Profile.tsx`)
+Displays:
+- Current balance (coins, gems)
+- Lifetime statistics
+- Performance metrics with derived calculations
+
+### Combo Scoring System
+**Combo Multipliers**:
+- Chain actions within 3 seconds: 1x → 2x → 3x → 4x
+- Applies to segment removal scoring
+- Stacks multiplicatively with inventory score upgrades
+- Visual indicator (`components/ComboIndicator.tsx`) shows current combo with color-coded animations
+
+**Bonus Scores**:
+- Perfect Clear (+500): Clear entire grid
+- No Undo (+200): Complete level without using undo
+- Thread Master (+150): Fire all 4 spools in single turn *(planned)*
+- Dragon Shrink Streak (+50 per segment over 5): Remove 5+ segments in one fire *(planned)*
+
+### Menu System (`components/StartMenu.tsx`, `components/Settings.tsx`)
+- Start Menu with navigation: Play, Daily Challenge, Shop, Achievements, Leaderboards, Profile/Stats, Settings
+- Settings: Sound/haptics toggles, reset progress
+- Checkpoint system: Level selection every 10 levels
+
+### Data Persistence
+All game progress stored in localStorage:
+- `thread-unbound-progress`: Current level, highest reached
+- `thread-unbound-settings`: Sound/haptics preferences
+- `thread-unbound-currency`: Coins and gems
+- `thread-unbound-completed-levels`: Set of completed level indices
+- `thread-unbound-inventory`: Shop purchases and upgrades
+- `thread-unbound-stats`: Player statistics
+
+## Development Roadmap
+
+See `roadmap_in_use.md` for the complete feature roadmap and implementation priorities.
+
+**Completed (Phase 1)**:
+- ✅ Start Menu & Settings
+- ✅ Currency System (Sumo Coins, Thread Gems)
+- ✅ Basic Shop (consumables + permanent upgrades)
+- ✅ Statistics Tracking & Profile Page
+- ✅ Combo Scoring System (partial - missing 2 bonuses)
+
+**Next Steps**:
+- Complete Section 2 bonuses (Thread Master, Dragon Shrink Streak)
+- Achievement System (Phase 1, item #5)
+- Special Tiles (Phase 2, item #6)
+
 ## Recent Updates (December 2024)
 
 ### Core Mechanics Changes
