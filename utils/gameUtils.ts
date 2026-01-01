@@ -136,7 +136,7 @@ export const LEVELS: LevelConfig[] = [
   }
 ];
 
-export const generateLevel = (difficulty: DifficultyConfig): Block[] => {
+export const generateLevel = (difficulty: DifficultyConfig): { blocks: Block[], lockedColors: BlockColor[] } => {
   const blocks: Block[] = [];
   const takenPositions = new Set<string>();
 
@@ -195,27 +195,57 @@ export const generateLevel = (difficulty: DifficultyConfig): Block[] => {
     }
   });
 
-  // Assign Keys and Locks (if difficulty includes them)
-  if (difficulty.keyCount > 0 && difficulty.lockedBlockChance > 0) {
-    const allColors = Array.from(new Set(blocks.map(b => b.color)));
-    const lockedColors = allColors.sort(() => 0.5 - Math.random()).slice(0, difficulty.keyCount);
+  // Add Locked Blocks (max 20% of blocks on board)
+  // Keys will appear in conveyor belt, not on the board
+  const maxLockedBlocks = Math.floor(blocks.length * 0.2); // 20% max
+  const lockedColors: BlockColor[] = [];
 
-    lockedColors.forEach(color => {
-      const blocksOfColor = blocks.filter(b => b.color === color);
-      if (blocksOfColor.length >= 3) {
-        const keyBlock = blocksOfColor[0];
-
-        keyBlock.type = 'key';
-        blocksOfColor.forEach(b => {
-          if (b.id !== keyBlock.id && Math.random() < difficulty.lockedBlockChance) {
-            b.type = 'locked';
-          }
-        });
+  if (maxLockedBlocks > 0 && blocks.length > 0) {
+    // Group blocks by color
+    const colorGroups = new Map<BlockColor, Block[]>();
+    blocks.forEach(block => {
+      if (!colorGroups.has(block.color)) {
+        colorGroups.set(block.color, []);
       }
+      colorGroups.get(block.color)!.push(block);
     });
+
+    // Find colors that have enough blocks to lock (at least 2)
+    const eligibleColors = Array.from(colorGroups.entries())
+      .filter(([_, blocks]) => blocks.length >= 2)
+      .map(([color]) => color);
+
+    if (eligibleColors.length > 0) {
+      // Pick 1-2 colors to have locked blocks
+      const numLockedColors = Math.min(2, eligibleColors.length);
+      const shuffledColors = eligibleColors.sort(() => Math.random() - 0.5);
+      const selectedColors = shuffledColors.slice(0, numLockedColors);
+
+      let totalLocked = 0;
+      selectedColors.forEach(color => {
+        const colorBlocks = colorGroups.get(color)!;
+        // Lock 30-50% of blocks of this color, but respect the 20% total limit
+        const numToLock = Math.min(
+          Math.floor(colorBlocks.length * (0.3 + Math.random() * 0.2)),
+          maxLockedBlocks - totalLocked
+        );
+
+        if (numToLock > 0) {
+          // Shuffle and lock random blocks of this color
+          const shuffled = colorBlocks.sort(() => Math.random() - 0.5);
+          for (let i = 0; i < numToLock && i < shuffled.length; i++) {
+            shuffled[i].type = 'locked';
+            totalLocked++;
+          }
+          lockedColors.push(color);
+        }
+      });
+
+      console.log(`🔒 Created ${totalLocked} locked blocks (${lockedColors.length} colors: ${lockedColors.join(', ')})`);
+    }
   }
 
-  return blocks;
+  return { blocks, lockedColors };
 };
 
 export const loadLevel = (config: LevelConfig): { blocks: Block[], dragon: BlockColor[] } => {
@@ -243,8 +273,24 @@ export const loadLevel = (config: LevelConfig): { blocks: Block[], dragon: Block
   return { blocks, dragon: [...config.dragon] };
 };
 
-export const generateConveyorBlocks = (count: number = 5): Block[] => {
-  return Array.from({ length: count }, (_, i) => {
+export const generateConveyorBlocks = (count: number = 5, lockedColors: BlockColor[] = []): Block[] => {
+  const blocks: Block[] = [];
+
+  // Add keys for each locked color (if any)
+  lockedColors.forEach(color => {
+    blocks.push({
+      id: `conveyor-${generateUUID()}`,
+      x: -1,
+      y: -1,
+      color: color,
+      direction: getRandomDirection(),
+      type: 'key',
+      threadCount: getRandomThreadCount()
+    });
+  });
+
+  // Generate normal conveyor blocks
+  const normalBlocks = Array.from({ length: count }, (_, i) => {
     // 10% chance for special tiles (3% sniper, 4% rainbow, 3% aggro from conveyor is disabled)
     const rand = Math.random();
     let blockType: BlockType = 'normal';
@@ -266,6 +312,14 @@ export const generateConveyorBlocks = (count: number = 5): Block[] => {
       threadCount: getRandomThreadCount()
     };
   });
+
+  // Combine keys and normal blocks, then shuffle
+  blocks.push(...normalBlocks);
+  blocks.sort(() => Math.random() - 0.5);
+
+  console.log(`🎰 Generated ${blocks.length} conveyor blocks (${lockedColors.length} keys)`);
+
+  return blocks;
 };
 
 export const generateDragon = (length: number = 20): BlockColor[] => {

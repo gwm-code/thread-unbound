@@ -160,6 +160,7 @@ export default function App() {
   const [aggroEffectEndTime, setAggroEffectEndTime] = useState<number>(0);
   const [lastAggroSpitTime, setLastAggroSpitTime] = useState<number>(0); // For 30s cooldown
   const [dragonUnder5StartTime, setDragonUnder5StartTime] = useState<number>(0); // When dragon first went under 5 segments
+  const [currentLockedColors, setCurrentLockedColors] = useState<BlockColor[]>([]); // Colors with locked blocks (for conveyor keys)
 
   // Load progress, settings, and currency from localStorage on mount
   useEffect(() => {
@@ -755,6 +756,7 @@ export default function App() {
     let newDragonColors: BlockColor[];
     let newConveyorCount = 5;
     let newGrowthInterval = 10000; // Default 10s for tutorial levels
+    let lockedColors: BlockColor[] = [];
 
     if (useLevel && LEVELS[currentLevel]) {
       // Tutorial levels (0-4): Use manually designed levels
@@ -762,6 +764,14 @@ export default function App() {
       newBlocks = levelData.blocks;
       newDragonColors = levelData.dragon;
       newConveyorCount = LEVELS[currentLevel].conveyorCount;
+
+      // Check if tutorial level has locked blocks (level 5 does)
+      const hasLockedBlocks = newBlocks.some(b => b.type === 'locked');
+      if (hasLockedBlocks) {
+        // Extract unique colors of locked blocks
+        const locked = newBlocks.filter(b => b.type === 'locked');
+        lockedColors = Array.from(new Set(locked.map(b => b.color)));
+      }
 
       // Ramp up snake speed in tutorial levels (faster baseline to match 3x default)
       // Level 1-2: 8s, Level 3: 7s, Level 4: 6s, Level 5: 5s
@@ -772,7 +782,9 @@ export default function App() {
       const difficulty = getDifficultyForLevel(currentLevel);
       console.log(`🎮 Level ${currentLevel + 1} - Difficulty:`, difficulty);
 
-      newBlocks = generateLevel(difficulty);
+      const levelData = generateLevel(difficulty);
+      newBlocks = levelData.blocks;
+      lockedColors = levelData.lockedColors;
       newDragonColors = generateDragon(difficulty.initialDragonLength);
       newConveyorCount = difficulty.conveyorCount;
       newGrowthInterval = difficulty.dragonGrowthInterval;
@@ -784,7 +796,7 @@ export default function App() {
     }));
 
     const newSpools = initSpools();
-    const initialConveyorBlocks = generateConveyorBlocks(10);
+    const initialConveyorBlocks = generateConveyorBlocks(10, lockedColors);
 
     setBlocks(newBlocks);
     setDragon(newDragon);
@@ -802,6 +814,7 @@ export default function App() {
     setUsedUndo(false);
     setSelectedKey(null);
     setDragonGrowthInterval(newGrowthInterval);
+    setCurrentLockedColors(lockedColors); // Store locked colors for conveyor generation
     setKitty({ isSwallowed: false, segmentIndex: 0 }); // Reset kitty to end of path
 
     // Reset Thread Master tracking
@@ -837,8 +850,8 @@ export default function App() {
     console.log(`handleBlockScrolledOff: removing block ${block.id}, adding 1 new tile`);
     setConveyorBlocks(prev => {
       const newBlocks = prev.filter(b => b.id !== block.id);
-      // Add one new tile to the end of the stream
-      const newTile = generateConveyorBlocks(1)[0];
+      // Add one new tile to the end of the stream (no keys - keys only in initial batch)
+      const newTile = generateConveyorBlocks(1, [])[0];
       return [...newBlocks, newTile];
     });
     // Clean up hidden ID
