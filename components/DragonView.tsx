@@ -1,7 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { BlockColor, DragonSegment, Kitty } from '../types';
-import { Cat } from 'lucide-react';
 
 interface DragonViewProps {
   segments: DragonSegment[];
@@ -24,6 +23,83 @@ const segmentStrokes: Record<BlockColor, string> = {
   green: '#047857',
   yellow: '#b45309',
   purple: '#6d28d9',
+};
+
+// Custom Kitty Component - matches dragon's visual style
+const KittyIcon: React.FC<{ size?: number; scared?: boolean }> = ({ size = 36, scared = false }) => {
+  const scale = size / 36; // Base size is 36
+  return (
+    <svg width={size} height={size} viewBox="0 0 36 36" fill="none">
+      <g transform={`scale(${scale})`}>
+        {/* Body (main circle) */}
+        <circle cx="18" cy="20" r="12" fill="#f97316" stroke="#c2410c" strokeWidth="2" />
+
+        {/* Body highlight */}
+        <circle cx="14" cy="16" r="4" fill="white" opacity="0.3" />
+
+        {/* Head (slightly overlapping) */}
+        <circle cx="18" cy="12" r="10" fill="#f97316" stroke="#c2410c" strokeWidth="2" />
+
+        {/* Head highlight */}
+        <circle cx="14" cy="9" r="3" fill="white" opacity="0.3" />
+
+        {/* Ears */}
+        <ellipse cx="11" cy="5" rx="3" ry="5" fill="#f97316" stroke="#c2410c" strokeWidth="1.5" />
+        <ellipse cx="25" cy="5" rx="3" ry="5" fill="#f97316" stroke="#c2410c" strokeWidth="1.5" />
+
+        {/* Inner ears (pink) */}
+        <ellipse cx="11" cy="6" rx="1.5" ry="2.5" fill="#fda4af" />
+        <ellipse cx="25" cy="6" rx="1.5" ry="2.5" fill="#fda4af" />
+
+        {scared ? (
+          <>
+            {/* Scared eyes (wide open circles) */}
+            <circle cx="14" cy="11" r="2.5" fill="white" stroke="#1a1410" strokeWidth="1" />
+            <circle cx="22" cy="11" r="2.5" fill="white" stroke="#1a1410" strokeWidth="1" />
+            <circle cx="14" cy="11" r="1.5" fill="#1a1410" />
+            <circle cx="22" cy="11" r="1.5" fill="#1a1410" />
+
+            {/* Scared mouth (O shape) */}
+            <ellipse cx="18" cy="16" rx="2" ry="3" fill="#1a1410" />
+          </>
+        ) : (
+          <>
+            {/* Happy eyes (closed curves) */}
+            <path d="M 12 11 Q 14 13 16 11" stroke="#1a1410" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+            <path d="M 20 11 Q 22 13 24 11" stroke="#1a1410" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+
+            {/* Happy mouth (smile) */}
+            <path d="M 15 15 Q 18 17 21 15" stroke="#1a1410" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+          </>
+        )}
+
+        {/* Nose */}
+        <ellipse cx="18" cy="14" rx="1.5" ry="1" fill="#fda4af" />
+
+        {/* Whiskers */}
+        <line x1="8" y1="13" x2="3" y2="12" stroke="#1a1410" strokeWidth="1" opacity="0.6" />
+        <line x1="8" y1="15" x2="3" y2="15" stroke="#1a1410" strokeWidth="1" opacity="0.6" />
+        <line x1="28" y1="13" x2="33" y2="12" stroke="#1a1410" strokeWidth="1" opacity="0.6" />
+        <line x1="28" y1="15" x2="33" y2="15" stroke="#1a1410" strokeWidth="1" opacity="0.6" />
+
+        {/* Tail */}
+        <path
+          d="M 27 22 Q 32 20 34 16"
+          stroke="#c2410c"
+          strokeWidth="3"
+          fill="none"
+          strokeLinecap="round"
+        />
+        <path
+          d="M 27 22 Q 32 20 34 16"
+          stroke="#f97316"
+          strokeWidth="2"
+          fill="none"
+          strokeLinecap="round"
+        />
+      </g>
+    </svg>
+  );
 };
 
 // Fixed Winding Path - snake emerges continuously from tunnel
@@ -157,8 +233,8 @@ export const DragonView: React.FC<DragonViewProps> = ({ segments, kitty, onSegme
               transition={{ type: 'spring', stiffness: 300, damping: 20 }}
           >
              <foreignObject width="36" height="36">
-               <div className="flex items-center justify-center w-full h-full text-slate-700">
-                 <Cat size={36} strokeWidth={2.5} className="text-slate-600" />
+               <div className="flex items-center justify-center w-full h-full">
+                 <KittyIcon size={36} scared={false} />
                </div>
              </foreignObject>
           </motion.g>
@@ -241,7 +317,7 @@ export const DragonView: React.FC<DragonViewProps> = ({ segments, kitty, onSegme
                     </g>
                   )}
 
-                  {/* Sad Kitty inside segment */}
+                  {/* Scared Kitty inside segment */}
                   {hasKitty && (
                     <motion.g
                       initial={{ scale: 0 }}
@@ -250,7 +326,7 @@ export const DragonView: React.FC<DragonViewProps> = ({ segments, kitty, onSegme
                     >
                       <foreignObject x={-14} y={-14} width="28" height="28">
                         <div className="flex items-center justify-center w-full h-full">
-                          <Cat size={28} strokeWidth={2.5} className="text-red-600" />
+                          <KittyIcon size={28} scared={true} />
                         </div>
                       </foreignObject>
                     </motion.g>
