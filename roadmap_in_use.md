@@ -82,7 +82,7 @@
 
 ## 💰 SECTION 4: META-PROGRESSION & ECONOMY
 
-### Currency System (3 Currencies)
+### Currency System (2 Currencies)
 
 1. **Sumo Coins** (Primary)
    - Earned: +50 per level completed
@@ -94,12 +94,7 @@
    - Earned: Daily login rewards
    - Earned: Special achievements only
    - Earned: (Optional) Real money purchase
-   - Used: Exclusive cosmetics, premium buffs
-
-3. **Kitty Hearts** (Affection/Progress)
-   - Earned: Save kitty from dragon
-   - Used: Unlock kitty cosmetics
-   - Used: Unlock special "Kitty Power" abilities
+   - Used: Premium power-ups, special upgrades
 
 ### Shop System
 
@@ -129,14 +124,6 @@
 4. **💎 Coin Magnet** (600 coins)
    - +25% coin earnings from all sources
 
-#### Cosmetics (6 Categories)
-- **Dragon Skins** - Color variants, particle effects, eyes
-- **Kitty Costumes** - Hats, accessories, expressions
-- **Block Themes** - Neon, Wood, Metal, Candy, Space
-- **Grid Backgrounds** - Different patterns and colors
-- **Thread Styles** - Rainbow threads, glowing, particle trails
-- **UI Themes** - Dark mode, pastel, cyberpunk, retro
-
 ### Progression Systems
 
 #### Level-Based Unlocks
@@ -149,10 +136,10 @@
 - **Level 100:** Unlock Endless Mode
 
 #### Prestige System
-- Reset to Level 1, keep cosmetics and gems
+- Reset to Level 1, keep purchased upgrades and gems
 - Earn "Prestige Stars" (displayed on profile)
 - Each prestige: +5% permanent score bonus
-- Unlock exclusive prestige-only cosmetics
+- Unlock exclusive prestige-only bonuses
 - Prestige leaderboard separate from main
 
 ---
@@ -174,8 +161,8 @@
 
 ### Event Challenges
 - Special themed levels (Halloween, Christmas, etc.)
-- Unique **dragon and kitty variants** only available during event
-- Exclusive cosmetic rewards
+- Unique **dragon variants** only available during event
+- Exclusive gem rewards and special power-ups
 - Event-specific currency/tokens
 
 ### Achievement System (20 Achievements - 5 Categories)
@@ -194,7 +181,7 @@
 - 🔥 Combo Master (Achieve 5x combo)
 
 #### Collection
-- 🎨 Fashionista (Unlock 10 cosmetics)
+- 🛒 Big Spender (Purchase 10 shop items)
 - 🎁 Collector (Open 50 mystery boxes)
 - 💰 Coin Hoarder (Have 5,000 coins at once)
 - 💎 Gem Enthusiast (Spend 500 gems)
@@ -393,7 +380,6 @@
 2. **Currency System**
    - Sumo Coins implementation
    - Thread Gems system
-   - Kitty Hearts tracking
    - Earning/spending logic
 
 3. **Basic Shop**
@@ -446,24 +432,20 @@
     - Endless Mode first
     - Then: Hard Mode, Kitty Rescue, Zen
 
-13. **Cosmetics Shop**
-    - 6 cosmetic categories
-    - Skin/theme application system
-
-14. **Dragon Variants**
+13. **Dragon Variants**
     - Classic, Chaos, Fire, Crystal
 
-15. **Visual & Audio Polish**
+14. **Visual & Audio Polish**
     - Particle effects
     - Animation improvements
     - Sound enhancements
 
-16. **Event System**
+15. **Event System**
     - Seasonal events
     - Event challenges
     - Limited-time rewards
 
-17. **Monetization**
+16. **Monetization**
     - Ad integration
     - IAP implementation
     - Premium Pass system
@@ -493,7 +475,7 @@
   - `GameExplanation.tsx` - Tutorial/help reference
 
 ### Performance Considerations
-- Lazy load cosmetics/assets
+- Lazy load images/assets
 - Optimize particle effects (limit count, pool instances)
 - Debounce currency updates
 - Cache leaderboard data

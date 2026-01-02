@@ -154,3 +154,33 @@ export interface PlayerAchievements {
   // Track newly unlocked (for notifications)
   recentlyUnlocked: string[];
 }
+
+export type ChallengeType = 'daily' | 'weekly';
+
+export interface Challenge {
+  id: string;
+  type: ChallengeType;
+  name: string;
+  description: string;
+  icon: string; // Emoji
+  requirement: number; // Target value to complete
+  rewardCoins?: number;
+  rewardGems?: number;
+  progressKey: keyof PlayerStats; // Which stat to track
+}
+
+export interface PlayerChallenges {
+  // Daily challenges reset at midnight
+  dailyResetTime: number; // Timestamp of last daily reset
+  dailyProgress: Record<string, number>; // Challenge ID -> progress
+  dailyCompleted: Set<string>; // Completed challenge IDs for today
+
+  // Weekly challenges reset on Monday
+  weeklyResetTime: number; // Timestamp of last weekly reset
+  weeklyProgress: Record<string, number>; // Challenge ID -> progress
+  weeklyCompleted: Set<string>; // Completed challenge IDs for this week
+
+  // Daily login streak
+  loginStreak: number; // Consecutive days logged in
+  lastLoginDate: string; // YYYY-MM-DD format
+}
