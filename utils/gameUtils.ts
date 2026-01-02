@@ -291,16 +291,24 @@ export const generateConveyorBlocks = (count: number = 5, lockedColors: BlockCol
 
   // Generate normal conveyor blocks
   const normalBlocks = Array.from({ length: count }, (_, i) => {
-    // 10% chance for special tiles (3% sniper, 4% rainbow, 3% aggro from conveyor is disabled)
+    // Special tile spawn rates (total ~20%)
     const rand = Math.random();
     let blockType: BlockType = 'normal';
 
-    if (rand < 0.03) {
-      blockType = 'sniper'; // 3% chance
-    } else if (rand < 0.07) {
-      blockType = 'rainbow'; // 4% chance (0.03 to 0.07)
+    if (rand < 0.04) {
+      blockType = 'sniper'; // 4% chance
+    } else if (rand < 0.10) {
+      blockType = 'rainbow'; // 6% chance (0.04 to 0.10)
+    } else if (rand < 0.13) {
+      blockType = 'spin'; // 3% chance (0.10 to 0.13)
+    } else if (rand < 0.16) {
+      blockType = 'multiplier'; // 3% chance (0.13 to 0.16)
+    } else if (rand < 0.19) {
+      blockType = 'mystery'; // 3% chance (0.16 to 0.19)
+    } else if (rand < 0.20) {
+      blockType = 'random'; // 1% chance (0.19 to 0.20)
     }
-    // Note: Aggro tiles only come from dragon spitting, not conveyor
+    // Note: Aggro, Freeze, and Bomb tiles only come from dragon spitting, not conveyor
 
     return {
       id: `conveyor-${generateUUID()}`,
