@@ -2,7 +2,7 @@ export type Direction = 'UP' | 'DOWN' | 'LEFT' | 'RIGHT' | 'UP-LEFT' | 'UP-RIGHT
 
 export type BlockColor = 'red' | 'blue' | 'green' | 'yellow' | 'purple';
 
-export type BlockType = 'normal' | 'key' | 'locked' | 'sniper' | 'rainbow' | 'aggro';
+export type BlockType = 'normal' | 'key' | 'locked' | 'sniper' | 'rainbow' | 'aggro' | 'spin' | 'random' | 'multiplier' | 'freeze' | 'bomb' | 'mystery';
 
 export type GameState = 'playing' | 'won' | 'game_over';
 
@@ -15,6 +15,14 @@ export interface Block {
   type: BlockType;
   threadCount: number; // 4, 6, 8, or 10 - how many snake segments this removes
   justUnlocked?: boolean;
+  countdown?: number; // For bomb tiles - number of moves until explosion
+}
+
+export interface Crater {
+  id: string;
+  x: number;
+  y: number;
+  turnsRemaining: number; // Number of turns until crater disappears
 }
 
 export interface DragonSegment {

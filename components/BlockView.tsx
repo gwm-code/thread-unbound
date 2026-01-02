@@ -65,6 +65,12 @@ export const BlockView: React.FC<BlockViewProps> = ({
   const isSniper = block.type === 'sniper';
   const isRainbow = block.type === 'rainbow';
   const isAggro = block.type === 'aggro';
+  const isSpin = block.type === 'spin';
+  const isRandom = block.type === 'random';
+  const isMultiplier = block.type === 'multiplier';
+  const isMystery = block.type === 'mystery';
+  const isFreeze = block.type === 'freeze';
+  const isBomb = block.type === 'bomb';
   const isUnlocking = !!block.justUnlocked;
 
   // Size scaling based on thread count: 4=0.85, 6=0.95, 8=1.05, 10=1.15
@@ -173,13 +179,37 @@ export const BlockView: React.FC<BlockViewProps> = ({
           <div className="text-2xl drop-shadow-md animate-pulse">🌈</div>
         ) : isAggro ? (
           <div className="text-2xl drop-shadow-md animate-bounce">😡</div>
+        ) : isSpin ? (
+          <div className="text-2xl drop-shadow-md" style={{ animation: 'spin 2s linear infinite' }}>🔄</div>
+        ) : isRandom ? (
+          <div className="relative">
+            <div className="text-2xl drop-shadow-md">🎲</div>
+            <div className="absolute inset-0 -z-10">
+              <Chevron direction={block.direction} className="opacity-50 scale-75" />
+            </div>
+          </div>
+        ) : isMultiplier ? (
+          <div className="text-2xl drop-shadow-md animate-pulse">🧩</div>
+        ) : isMystery ? (
+          <div className="text-2xl drop-shadow-md animate-bounce">🎁</div>
+        ) : isFreeze ? (
+          <div className="text-2xl drop-shadow-md animate-pulse">🧊</div>
+        ) : isBomb ? (
+          <div className="relative">
+            <div className="text-2xl drop-shadow-md animate-bounce">💣</div>
+            {block.countdown !== undefined && (
+              <div className="absolute -top-1 -right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold animate-pulse">
+                {block.countdown}
+              </div>
+            )}
+          </div>
         ) : (
           <Chevron direction={block.direction} />
         )}
       </div>
 
       {/* Thread Count Badge - Bottom Right Corner (only for normal tiles) */}
-      {!isKey && !isSniper && !isRainbow && !isAggro && (
+      {!isKey && !isSniper && !isRainbow && !isAggro && !isSpin && !isRandom && !isMultiplier && !isMystery && !isFreeze && !isBomb && (
         <div className="absolute bottom-0.5 right-0.5 bg-black/70 text-white rounded-full w-4 h-4 flex items-center justify-center text-[8px] font-bold z-20">
           {block.threadCount}
         </div>

@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect, useMemo } from 'react';
-import { Block, GridSize } from '../types';
+import { Block, GridSize, Crater } from '../types';
 import { BlockView } from './BlockView';
 import { AnimatePresence } from 'framer-motion';
 
@@ -9,9 +9,10 @@ interface GridProps {
   onBlockClick: (block: Block) => void;
   selectedKeyId?: string | null;
   aggroTileId?: string | null;
+  craters?: Crater[];
 }
 
-export const Grid: React.FC<GridProps> = ({ blocks, gridSize, onBlockClick, selectedKeyId, aggroTileId }) => {
+export const Grid: React.FC<GridProps> = ({ blocks, gridSize, onBlockClick, selectedKeyId, aggroTileId, craters = [] }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [cellSize, setCellSize] = useState(60);
 
@@ -51,6 +52,25 @@ export const Grid: React.FC<GridProps> = ({ blocks, gridSize, onBlockClick, sele
         {aggroTileId && (
           <div className="absolute inset-0 bg-red-500/10 backdrop-blur-[1px] pointer-events-none z-10 animate-pulse" />
         )}
+
+        {/* Craters */}
+        {craters.map((crater) => (
+          <div
+            key={crater.id}
+            className="absolute bg-slate-800/80 rounded-lg border-2 border-slate-900 flex items-center justify-center pointer-events-none z-5"
+            style={{
+              width: `${cellSize - 6}px`,
+              height: `${cellSize - 6}px`,
+              left: crater.x * cellSize + 3,
+              top: crater.y * cellSize + 3,
+            }}
+          >
+            <div className="text-xs font-bold text-white/50">💥</div>
+            <div className="absolute bottom-0.5 right-0.5 bg-red-600 text-white rounded-full w-4 h-4 flex items-center justify-center text-[8px] font-bold">
+              {crater.turnsRemaining}
+            </div>
+          </div>
+        ))}
 
         <AnimatePresence>
           {blocks.map((block) => {

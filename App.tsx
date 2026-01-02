@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { RefreshCw, Play, Info, RotateCcw, Shuffle, Trophy, XCircle, Clock, Map, Coins, Gem } from 'lucide-react';
 // Toast removed - no longer needed
-import { Block, Spool, BlockColor, Thread, GameState, DragonSegment, Kitty, PlayerCurrency, PlayerInventory, PlayerStats, PlayerAchievements } from './types';
+import { Block, Spool, BlockColor, Thread, GameState, DragonSegment, Kitty, PlayerCurrency, PlayerInventory, PlayerStats, PlayerAchievements, Crater } from './types';
 import {
   GRID_SIZE,
   generateLevel,
@@ -155,12 +155,18 @@ export default function App() {
 
   // Special Tiles State
   const [selectedSniper, setSelectedSniper] = useState<Block | null>(null); // Sniper tile awaiting target selection
-  const [selectedRainbow, setSelectedRainbow] = useState<Block | null>(null); // Rainbow tile awaiting color selection
   const [aggroEffectActive, setAggroEffectActive] = useState(false); // Aggro 3x speed effect active
   const [aggroEffectEndTime, setAggroEffectEndTime] = useState<number>(0);
   const [lastAggroSpitTime, setLastAggroSpitTime] = useState<number>(0); // For 30s cooldown
   const [dragonUnder5StartTime, setDragonUnder5StartTime] = useState<number>(0); // When dragon first went under 5 segments
   const [currentLockedColors, setCurrentLockedColors] = useState<BlockColor[]>([]); // Colors with locked blocks (for conveyor keys)
+  const [multiplierEffectActive, setMultiplierEffectActive] = useState(false); // Multiplier 2x score/coins for 10s
+  const [multiplierEffectEndTime, setMultiplierEffectEndTime] = useState<number>(0);
+  const [freezeEffectActive, setFreezeEffectActive] = useState(false); // Freeze spools for 10s
+  const [freezeEffectEndTime, setFreezeEffectEndTime] = useState<number>(0);
+  const [lastFreezeSpitTime, setLastFreezeSpitTime] = useState<number>(0); // Prevent spam
+  const [craters, setCraters] = useState<Crater[]>([]); // Unusable grid spots
+  const [lastBombSpitTime, setLastBombSpitTime] = useState<number>(0); // Prevent spam
 
   // Load progress, settings, and currency from localStorage on mount
   useEffect(() => {
@@ -334,8 +340,14 @@ export default function App() {
   // Currency helper functions
   const addCoins = (amount: number) => {
     // Apply coin magnet bonus (+25%)
-    const bonusMultiplier = inventory.hasCoinMagnet ? 1.25 : 1;
-    const finalAmount = Math.floor(amount * bonusMultiplier);
+    let multiplier = inventory.hasCoinMagnet ? 1.25 : 1;
+
+    // Apply multiplier tile bonus (2x) if active
+    if (multiplierEffectActive) {
+      multiplier *= 2;
+    }
+
+    const finalAmount = Math.floor(amount * multiplier);
     setCurrency(prev => ({ ...prev, coins: prev.coins + finalAmount }));
 
     // Track total coins earned
@@ -402,6 +414,11 @@ export default function App() {
     // Apply combo multiplier
     if (applyCombo) {
       multiplier *= getComboMultiplier();
+    }
+
+    // Apply multiplier tile bonus (2x) if active
+    if (multiplierEffectActive) {
+      multiplier *= 2;
     }
 
     const finalAmount = Math.floor(amount * multiplier);
@@ -556,6 +573,50 @@ export default function App() {
 
     return () => clearTimeout(timer);
   }, [aggroEffectActive, aggroEffectEndTime]);
+
+  // --- MULTIPLIER EFFECT TIMER ---
+  // Clear multiplier effect after 10 seconds
+  useEffect(() => {
+    if (!multiplierEffectActive) return;
+
+    const currentTime = Date.now();
+    const timeRemaining = multiplierEffectEndTime - currentTime;
+
+    if (timeRemaining <= 0) {
+      console.log('🧩 Multiplier effect ended!');
+      setMultiplierEffectActive(false);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setMultiplierEffectActive(false);
+      console.log('🧩 Multiplier effect ended!');
+    }, timeRemaining);
+
+    return () => clearTimeout(timer);
+  }, [multiplierEffectActive, multiplierEffectEndTime]);
+
+  // --- FREEZE EFFECT TIMER ---
+  // Clear freeze effect after 10 seconds
+  useEffect(() => {
+    if (!freezeEffectActive) return;
+
+    const currentTime = Date.now();
+    const timeRemaining = freezeEffectEndTime - currentTime;
+
+    if (timeRemaining <= 0) {
+      console.log('🧊 Freeze effect ended!');
+      setFreezeEffectActive(false);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setFreezeEffectActive(false);
+      console.log('🧊 Freeze effect ended!');
+    }, timeRemaining);
+
+    return () => clearTimeout(timer);
+  }, [freezeEffectActive, freezeEffectEndTime]);
 
   // Thread Master bonus: Clear recently fired spools after 3 seconds
   useEffect(() => {
@@ -906,6 +967,100 @@ export default function App() {
         return prevDragon;
       });
 
+      // FREEZE TILE SPITTING: 10% chance after dragon grows
+      if (dragonGrew && Math.random() < 0.1) {
+        const currentTime = Date.now();
+        const timeSinceLastFreeze = currentTime - lastFreezeSpitTime;
+
+        // Prevent spam (5 second cooldown)
+        if (timeSinceLastFreeze >= 5000) {
+          // Find empty spools
+          setSpools(prevSpools => {
+            const emptySpoolIndices = prevSpools
+              .map((spool, idx) => ({ spool, idx }))
+              .filter(({ spool }) => spool.block === null)
+              .map(({ idx }) => idx);
+
+            if (emptySpoolIndices.length > 0) {
+              // Pick random empty spool
+              const randomSpoolIdx = emptySpoolIndices[Math.floor(Math.random() * emptySpoolIndices.length)];
+
+              console.log('🧊 DRAGON SPITTING FREEZE TILE!');
+              playSound('error');
+              triggerHaptic([50, 50, 50]);
+
+              // Create freeze tile
+              const freezeTile: Block = {
+                id: generateUUID(),
+                x: 0, // Position doesn't matter for spool blocks
+                y: 0,
+                color: 'blue', // Freeze tiles are blue for visibility
+                direction: 'DOWN',
+                type: 'freeze',
+                threadCount: 0, // Doesn't remove segments
+              };
+
+              // Place freeze tile in random empty spool
+              const newSpools = [...prevSpools];
+              newSpools[randomSpoolIdx] = { ...newSpools[randomSpoolIdx], block: freezeTile };
+
+              // Activate freeze effect (freeze ALL spools for 10 seconds)
+              setFreezeEffectActive(true);
+              setFreezeEffectEndTime(currentTime + 10000);
+              setLastFreezeSpitTime(currentTime);
+
+              return newSpools;
+            }
+
+            // No empty spools - no effect
+            return prevSpools;
+          });
+        }
+      }
+
+      // BOMB SPITTING: 10% chance after dragon grows
+      if (dragonGrew && Math.random() < 0.1) {
+        const currentTime = Date.now();
+        const timeSinceLastBomb = currentTime - lastBombSpitTime;
+
+        // Prevent spam (5 second cooldown)
+        if (timeSinceLastBomb >= 5000) {
+          // Find empty grid positions (not occupied by blocks or craters)
+          const emptyPositions: { x: number; y: number }[] = [];
+          for (let row = 0; row < GRID_SIZE.rows; row++) {
+            for (let col = 0; col < GRID_SIZE.cols; col++) {
+              const occupiedByBlock = blocks.some(b => Math.round(b.x) === col && Math.round(b.y) === row);
+              const occupiedByCrater = craters.some(c => c.x === col && c.y === row);
+              if (!occupiedByBlock && !occupiedByCrater) {
+                emptyPositions.push({ x: col, y: row });
+              }
+            }
+          }
+
+          if (emptyPositions.length > 0) {
+            const randomPos = emptyPositions[Math.floor(Math.random() * emptyPositions.length)];
+
+            console.log('💣 DRAGON SPITTING BOMB!');
+            playSound('error');
+            triggerHaptic([50, 50, 50]);
+
+            const bombTile: Block = {
+              id: generateUUID(),
+              x: randomPos.x,
+              y: randomPos.y,
+              color: 'red', // Bombs are red for danger
+              direction: 'DOWN',
+              type: 'bomb',
+              threadCount: 0, // Doesn't remove segments
+              countdown: 3, // 3 moves until explosion
+            };
+
+            setBlocks(prev => [...prev, bombTile]);
+            setLastBombSpitTime(currentTime);
+          }
+        }
+      }
+
       // Handle kitty digestion when at max length
       setKitty(prev => {
         const isAtMaxLength = finalDragonLength >= maxDragonLength;
@@ -1015,6 +1170,31 @@ export default function App() {
       }
     }
   }, [currentScreen, dragon.length, gameState, dragonUnder5StartTime, lastAggroSpitTime, blocks]);
+
+  // --- RANDOM TILE DIRECTION CHANGER ---
+  // Change direction of random tiles every 3 seconds
+  useEffect(() => {
+    if (currentScreen !== 'playing' || gameState !== 'playing') return;
+
+    const interval = setInterval(() => {
+      setBlocks(prev => {
+        const hasRandomTiles = prev.some(b => b.type === 'random');
+        if (!hasRandomTiles) return prev;
+
+        return prev.map(b => {
+          if (b.type === 'random') {
+            // Pick a random direction
+            const directions: Direction[] = ['UP', 'DOWN', 'LEFT', 'RIGHT', 'UP-LEFT', 'UP-RIGHT', 'DOWN-LEFT', 'DOWN-RIGHT'];
+            const randomDir = directions[Math.floor(Math.random() * directions.length)];
+            return { ...b, direction: randomDir };
+          }
+          return b;
+        });
+      });
+    }, 3000); // Change every 3 seconds
+
+    return () => clearInterval(interval);
+  }, [currentScreen, gameState]);
 
   // --- AUTO-FIRE MECHANISM ---
   // Check if snake head color matches any spool, then fire automatically
@@ -1364,50 +1544,130 @@ export default function App() {
     }
   };
 
-  // Handle Sniper tile: Remove a specific dragon segment
-  const handleSniperTarget = (segmentIndex: number) => {
+  // Helper: Rotate direction 90° clockwise
+  const rotateDirection = (dir: Direction): Direction => {
+    const rotationMap: Record<Direction, Direction> = {
+      'UP': 'RIGHT',
+      'RIGHT': 'DOWN',
+      'DOWN': 'LEFT',
+      'LEFT': 'UP',
+      'UP-RIGHT': 'DOWN-RIGHT',
+      'DOWN-RIGHT': 'DOWN-LEFT',
+      'DOWN-LEFT': 'UP-LEFT',
+      'UP-LEFT': 'UP-RIGHT',
+    };
+    return rotationMap[dir];
+  };
+
+  // Handle bomb explosion
+  const handleBombExplosion = (bomb: Block) => {
+    console.log(`💥 BOMB EXPLODING at (${bomb.x}, ${bomb.y})!`);
+    playSound('error');
+    triggerHaptic([100, 50, 100, 50, 100]);
+
+    // Get 8 adjacent positions
+    const adjacentPositions = [
+      { x: bomb.x - 1, y: bomb.y - 1 }, // Top-left
+      { x: bomb.x, y: bomb.y - 1 },     // Top
+      { x: bomb.x + 1, y: bomb.y - 1 }, // Top-right
+      { x: bomb.x - 1, y: bomb.y },     // Left
+      { x: bomb.x + 1, y: bomb.y },     // Right
+      { x: bomb.x - 1, y: bomb.y + 1 }, // Bottom-left
+      { x: bomb.x, y: bomb.y + 1 },     // Bottom
+      { x: bomb.x + 1, y: bomb.y + 1 }, // Bottom-right
+    ];
+
+    // Remove bomb and adjacent blocks
+    setBlocks(prev => {
+      return prev.filter(b => {
+        // Remove bomb itself
+        if (b.id === bomb.id) return false;
+
+        // Remove adjacent blocks
+        const isAdjacent = adjacentPositions.some(
+          pos => Math.round(b.x) === pos.x && Math.round(b.y) === pos.y
+        );
+        return !isAdjacent;
+      });
+    });
+
+    // Create craters at bomb position and adjacent positions
+    const newCraters: Crater[] = [
+      {
+        id: generateUUID(),
+        x: Math.round(bomb.x),
+        y: Math.round(bomb.y),
+        turnsRemaining: 3,
+      },
+      ...adjacentPositions.map(pos => ({
+        id: generateUUID(),
+        x: pos.x,
+        y: pos.y,
+        turnsRemaining: 3,
+      }))
+    ];
+
+    setCraters(prev => [...prev, ...newCraters]);
+    registerComboAction();
+  };
+
+  // Handle Spin tile: Rotate 8 adjacent tiles 90° clockwise
+  const handleSpinTile = (spinBlock: Block) => {
+    console.log(`🔄 Spin tile activated at (${spinBlock.x}, ${spinBlock.y})`);
+    pushHistory();
+    playSound('shuffle');
+    triggerHaptic([10, 10, 10]);
+
+    // Get 8 adjacent positions
+    const adjacentPositions = [
+      { x: spinBlock.x - 1, y: spinBlock.y - 1 }, // Top-left
+      { x: spinBlock.x, y: spinBlock.y - 1 },     // Top
+      { x: spinBlock.x + 1, y: spinBlock.y - 1 }, // Top-right
+      { x: spinBlock.x - 1, y: spinBlock.y },     // Left
+      { x: spinBlock.x + 1, y: spinBlock.y },     // Right
+      { x: spinBlock.x - 1, y: spinBlock.y + 1 }, // Bottom-left
+      { x: spinBlock.x, y: spinBlock.y + 1 },     // Bottom
+      { x: spinBlock.x + 1, y: spinBlock.y + 1 }, // Bottom-right
+    ];
+
+    // Rotate direction of blocks at adjacent positions
+    setBlocks(prev => {
+      const rotated = prev.map(b => {
+        // Check if this block is at an adjacent position
+        const isAdjacent = adjacentPositions.some(
+          pos => Math.round(b.x) === pos.x && Math.round(b.y) === pos.y
+        );
+
+        if (isAdjacent) {
+          return { ...b, direction: rotateDirection(b.direction) };
+        }
+        return b;
+      });
+
+      // Remove the spin tile after use
+      return rotated.filter(b => b.id !== spinBlock.id);
+    });
+
+    registerComboAction();
+    addScore(25); // Bonus for using spin
+  };
+
+  // Handle Sniper tile: Remove any board tile (bombs, hazards, locked tiles, etc.)
+  const handleSniperTarget = (targetBlock: Block) => {
     if (!selectedSniper) return;
 
-    console.log(`🎯 Sniper targeting segment ${segmentIndex}`);
+    console.log(`🎯 Sniper targeting board tile ${targetBlock.id}`);
     pushHistory();
     playSound('pop');
     triggerHaptic([30, 30, 30]);
 
-    // Remove the selected segment
-    setDragon(prev => prev.filter((_, idx) => idx !== segmentIndex));
-
-    // Remove sniper tile from board
-    setBlocks(prev => prev.filter(b => b.id !== selectedSniper.id));
+    // Remove the targeted tile from board
+    setBlocks(prev => prev.filter(b => b.id !== targetBlock.id && b.id !== selectedSniper.id));
 
     // Clear selection
     setSelectedSniper(null);
     registerComboAction();
     addScore(50); // Bonus for using sniper
-  };
-
-  // Handle Rainbow tile: Choose a color
-  const handleRainbowColorSelect = (color: BlockColor) => {
-    if (!selectedRainbow) return;
-
-    console.log(`🌈 Rainbow tile changed to ${color}`);
-    pushHistory();
-    playSound('move');
-    triggerHaptic(10);
-
-    // Convert rainbow tile to normal tile with chosen color
-    const normalizedTile: Block = {
-      ...selectedRainbow,
-      type: 'normal',
-      color: color,
-      threadCount: selectedRainbow.threadCount || 6, // Default thread count
-    };
-
-    // Replace rainbow tile with normal colored tile
-    setBlocks(prev => prev.map(b => b.id === selectedRainbow.id ? normalizedTile : b));
-
-    // Clear selection
-    setSelectedRainbow(null);
-    registerComboAction();
   };
 
   const handleBlockClick = (block: Block, source: 'grid' | 'conveyor') => {
@@ -1417,6 +1677,12 @@ export default function App() {
     if (!levelAttemptCountedRef.current) {
       levelAttemptCountedRef.current = true;
       setStats(prev => ({ ...prev, levelsAttempted: prev.levelsAttempted + 1 }));
+    }
+
+    // --- SNIPER MODE: Target board tile ---
+    if (selectedSniper && source === 'grid' && block.id !== selectedSniper.id) {
+      handleSniperTarget(block);
+      return;
     }
 
     // --- AGGRO TILE BOARD LOCK ---
@@ -1432,19 +1698,61 @@ export default function App() {
 
     // --- SPECIAL TILE HANDLING (from grid only) ---
     if (source === 'grid') {
-      // SNIPER TILE: Enter target selection mode
-      if (block.type === 'sniper') {
-        console.log('🎯 Sniper tile clicked! Select a dragon segment to remove.');
-        setSelectedSniper(block);
-        playSound('move');
-        triggerHaptic(10);
+      // MYSTERY BOX: Transform into random special tile
+      if (block.type === 'mystery') {
+        console.log('🎁 MYSTERY BOX OPENED!');
+        pushHistory();
+        playSound('shuffle');
+        triggerHaptic([15, 15, 15]);
+
+        // Pick a random special tile type (all currently implemented tiles)
+        const specialTiles: BlockType[] = ['sniper', 'rainbow', 'spin', 'random', 'multiplier', 'aggro'];
+        const randomType = specialTiles[Math.floor(Math.random() * specialTiles.length)];
+
+        console.log(`  Mystery box transformed into: ${randomType}`);
+
+        // Transform mystery box into the random tile type
+        setBlocks(prev => prev.map(b => {
+          if (b.id === block.id) {
+            return { ...b, type: randomType };
+          }
+          return b;
+        }));
+
+        registerComboAction();
+        addScore(20); // Small bonus for opening
         return;
       }
 
-      // RAINBOW TILE: Enter color selection mode
-      if (block.type === 'rainbow') {
-        console.log('🌈 Rainbow tile clicked! Select a color.');
-        setSelectedRainbow(block);
+      // SPIN TILE: Rotate adjacent tiles 90° clockwise
+      if (block.type === 'spin') {
+        handleSpinTile(block);
+        return;
+      }
+
+      // MULTIPLIER TILE: Activate 2x score/coins for 10 seconds
+      if (block.type === 'multiplier') {
+        console.log('🧩 MULTIPLIER TILE ACTIVATED! 2x score/coins for 10 seconds!');
+        pushHistory();
+        playSound('pop');
+        triggerHaptic([20, 20, 20]);
+
+        // Remove multiplier tile from board
+        setBlocks(prev => prev.filter(b => b.id !== block.id));
+
+        // Activate multiplier effect (2x for 10 seconds)
+        setMultiplierEffectActive(true);
+        setMultiplierEffectEndTime(Date.now() + 10000);
+
+        registerComboAction();
+        addScore(30); // Bonus for using multiplier
+        return;
+      }
+
+      // SNIPER TILE: Enter target selection mode
+      if (block.type === 'sniper') {
+        console.log('🎯 Sniper tile clicked! Select any board tile to remove.');
+        setSelectedSniper(block);
         playSound('move');
         triggerHaptic(10);
         return;
@@ -1491,15 +1799,16 @@ export default function App() {
 
     // --- CONVEYOR LOGIC ---
     if (source === 'conveyor') {
-      // Find all empty Layer 0 spots
+      // Find all empty Layer 0 spots (not occupied by blocks or craters)
       const emptySpots: { x: number; y: number }[] = [];
 
       // Scan grid for all empty spots
       for (let r = 0; r < GRID_SIZE.rows; r++) {
         for (let c = 0; c < GRID_SIZE.cols; c++) {
           // Check if ANY block is at this x,y (Layer 0 or 1)
-          const occupied = blocks.some(b => Math.round(b.x) === c && Math.round(b.y) === r);
-          if (!occupied) {
+          const occupiedByBlock = blocks.some(b => Math.round(b.x) === c && Math.round(b.y) === r);
+          const occupiedByCrater = craters.some(crater => crater.x === c && crater.y === r);
+          if (!occupiedByBlock && !occupiedByCrater) {
             emptySpots.push({ x: c, y: r });
           }
         }
@@ -1581,10 +1890,21 @@ export default function App() {
         return;
       }
     }
-    if (!isPathClear(block, blocks, GRID_SIZE)) {
+
+    // Rainbow tiles are OMNI-DIRECTIONAL - always have a clear path (bypass path checking)
+    const isRainbow = block.type === 'rainbow';
+    if (!isRainbow && !isPathClear(block, blocks, GRID_SIZE)) {
       playSound('error');
       triggerHaptic(50);
-      return; 
+      return;
+    }
+
+    // Check if spools are frozen
+    if (freezeEffectActive) {
+      playSound('error');
+      triggerHaptic([100, 50, 100]); // Triple buzz to indicate freeze
+      console.log('🧊 Spools are frozen! Cannot move blocks.');
+      return;
     }
 
     // NEW SPOOL LOGIC: Find first empty spool (no stacking, no match-3!)
@@ -1602,8 +1922,31 @@ export default function App() {
     playSound('move');
     triggerHaptic(10);
 
-    // Remove block from grid
-    setBlocks(prev => prev.filter(b => b.id !== block.id));
+    // Decrement bomb countdowns and handle explosions
+    setBlocks(prev => {
+      const updated = prev.map(b => {
+        if (b.type === 'bomb' && b.countdown !== undefined) {
+          const newCountdown = b.countdown - 1;
+          if (newCountdown <= 0) {
+            // Schedule explosion for this bomb
+            setTimeout(() => handleBombExplosion(b), 100);
+            return null; // Will be filtered out
+          }
+          return { ...b, countdown: newCountdown };
+        }
+        return b;
+      }).filter((b): b is Block => b !== null);
+
+      // Remove the clicked block
+      return updated.filter(b => b.id !== block.id);
+    });
+
+    // Decrement crater turns
+    setCraters(prev => {
+      return prev
+        .map(c => ({ ...c, turnsRemaining: c.turnsRemaining - 1 }))
+        .filter(c => c.turnsRemaining > 0);
+    });
 
     // Place block in empty spool (ONE block per spool)
     setSpools(prev => {
@@ -1802,13 +2145,11 @@ export default function App() {
         <DragonView
           segments={dragon}
           kitty={kitty}
-          onSegmentClick={selectedSniper ? handleSniperTarget : undefined}
-          sniperMode={!!selectedSniper}
         />
 
         {/* Spools - Horizontal at top of grid */}
         <div className="w-full flex justify-center py-1 z-30">
-          <BufferArea slots={spools} />
+          <BufferArea slots={spools} isFrozen={freezeEffectActive} />
         </div>
 
         {/* Grid - Centered */}
@@ -1819,6 +2160,7 @@ export default function App() {
             onBlockClick={(b) => handleBlockClick(b, 'grid')}
             selectedKeyId={selectedKey?.id}
             aggroTileId={blocks.find(b => b.type === 'aggro')?.id || null}
+            craters={craters}
           />
         </div>
 
@@ -1945,59 +2287,23 @@ export default function App() {
         </div>
       )}
 
-      {/* SNIPER TARGETING OVERLAY */}
+      {/* SNIPER TARGETING OVERLAY - Positioned over dragon area */}
       {selectedSniper && (
-        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center p-6 pointer-events-none">
-          <div className="bg-slate-800/95 backdrop-blur-md rounded-2xl shadow-2xl p-6 border-2 border-slate-600 pointer-events-auto">
-            <div className="text-center text-white mb-4">
-              <div className="text-5xl mb-3">🎯</div>
-              <h2 className="text-2xl font-bold mb-2">Sniper Mode</h2>
-              <p className="text-white/80 mb-4">Click a dragon segment to remove it</p>
+        <div className="absolute top-0 left-0 right-0 z-50 flex justify-center pt-4 pointer-events-none">
+          <div className="bg-slate-800/95 backdrop-blur-md rounded-2xl shadow-2xl px-6 py-3 border-2 border-slate-600 pointer-events-auto">
+            <div className="flex items-center gap-4 text-white">
+              <div className="text-3xl">🎯</div>
+              <div className="text-left">
+                <h2 className="text-lg font-bold">Sniper Mode</h2>
+                <p className="text-white/80 text-sm">Click any board tile to remove it</p>
+              </div>
               <button
                 onClick={() => setSelectedSniper(null)}
-                className="px-6 py-2 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 active:scale-95 transition-all"
+                className="px-4 py-2 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 active:scale-95 transition-all text-sm"
               >
                 Cancel
               </button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* RAINBOW COLOR SELECTION OVERLAY */}
-      {selectedRainbow && (
-        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center p-6 pointer-events-none">
-          <div className="bg-slate-800/95 backdrop-blur-md rounded-2xl shadow-2xl p-6 border-2 border-slate-600 pointer-events-auto">
-            <div className="text-center text-white mb-4">
-              <div className="text-5xl mb-3">🌈</div>
-              <h2 className="text-2xl font-bold mb-2">Rainbow Tile</h2>
-              <p className="text-white/80 mb-4">Choose a color</p>
-            </div>
-
-            <div className="flex gap-3 mb-4">
-              {(['red', 'blue', 'green', 'yellow', 'purple'] as BlockColor[]).map(color => (
-                <button
-                  key={color}
-                  onClick={() => handleRainbowColorSelect(color)}
-                  className={`
-                    w-16 h-16 rounded-xl border-4 border-white/50 shadow-lg
-                    hover:scale-110 hover:border-white active:scale-95 transition-all
-                    ${color === 'red' ? 'bg-red-500' : ''}
-                    ${color === 'blue' ? 'bg-blue-500' : ''}
-                    ${color === 'green' ? 'bg-emerald-500' : ''}
-                    ${color === 'yellow' ? 'bg-amber-400' : ''}
-                    ${color === 'purple' ? 'bg-violet-500' : ''}
-                  `}
-                />
-              ))}
-            </div>
-
-            <button
-              onClick={() => setSelectedRainbow(null)}
-              className="w-full px-6 py-2 bg-slate-600 text-white font-bold rounded-xl hover:bg-slate-700 active:scale-95 transition-all"
-            >
-              Cancel
-            </button>
           </div>
         </div>
       )}
