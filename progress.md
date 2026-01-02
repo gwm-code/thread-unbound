@@ -2,14 +2,14 @@
 
 *Tracking implementation progress against `roadmap_in_use.md`*
 
-Last Updated: January 1, 2025
+Last Updated: January 2, 2025
 
 ---
 
 ## 📊 Overall Progress
 
 **Phase 1 (Core Foundation)**: 5/5 complete (100%)
-**Phase 2 (Gameplay Depth)**: 1/5 started (20%)
+**Phase 2 (Gameplay Depth)**: 4/5 complete (80%)
 **Phase 3 (Long-term Engagement)**: 0/7 (0%)
 
 ---
@@ -48,24 +48,26 @@ Last Updated: January 1, 2025
 
 ---
 
-#### 3. Basic Shop ✅
+#### 3. Shop System ✅
 - [x] Shop UI/UX with tabs (`components/Shop.tsx`)
-- [x] Consumable power-ups (4 items):
+- [x] Consumable power-ups (4 items - coins):
   - Extra Undo (50 coins)
   - Freeze Time (100 coins)
   - Conveyor Speed (50 coins)
   - Reroll Grid (100 coins)
-- [x] Permanent upgrades (4 items):
-  - Score Multiplier I/II/III (500/1000/2000 coins)
-  - Starting Undo (300 coins)
-  - Spool Upgrade (1500 coins)
-  - Coin Magnet (600 coins)
+- [x] Permanent upgrades (6 items - gems only):
+  - Score Multiplier I/II/III (50/100/200 gems)
+  - Starting Undo (30 gems)
+  - Spool Upgrade (150 gems)
+  - Coin Magnet (60 gems)
 - [x] Purchase flow with validation
 - [x] Inventory state management (`PlayerInventory`)
 - [x] localStorage persistence (`thread-unbound-inventory`)
+- [x] Consumable usage system (see Phase 2 section 10)
 
 **Commits**:
 - Add shop system with consumables and permanent upgrades
+- Change permanent upgrades to gems-only currency
 
 ---
 
@@ -131,19 +133,33 @@ Last Updated: January 1, 2025
 
 ### Phase 2: Gameplay Depth
 
-#### 6. Special Tiles ❌ NOT STARTED
+#### 6. Special Tiles ✅ COMPLETE (9/9 tiles)
 From `roadmap_in_use.md` Section 1:
-- [ ] Sniper Tile (🎯)
-- [ ] Rainbow Tile (🌈)
-- [ ] Aggro Tile (😡)
-- [ ] Freeze Tile (🧊)
-- [ ] Time Bomb (💣)
-- [ ] Random Tile (🎲)
-- [ ] Mystery Box (🎁)
-- [ ] Multiplier Tile (🧩)
-- [ ] Spin Tile (🔄)
 
-**Priority**: Start with Sniper, Rainbow, Aggro
+**Implemented:**
+- [x] Sniper Tile (🎯) - Click to target specific dragon segment
+- [x] Rainbow Tile (🌈) - Choose color when clicked, acts as wildcard
+- [x] Aggro Tile (😡) - Dragon shoots projectile, 3x speed for 10s
+- [x] Freeze Tile (🧊) - Dragon shoots projectile, freezes spools for 10s
+- [x] Bomb Tile (💣) - Countdown from 3, explodes creating crater
+- [x] Random Tile (🎲) - Changes direction every 3 seconds
+- [x] Mystery Box (🎁) - Random reward: coins, gems, or consumable
+- [x] Multiplier Tile (🧩) - 2x score/coins for 10 seconds with popup
+- [x] Spin Tile (🔄) - Rotates adjacent blocks 90° clockwise
+
+**Key Features:**
+- Dragon projectile system with visual animations
+- Crater mechanic (unusable grid spots, expire after 10s)
+- Bomb countdown system with auto-explosion
+- Color picker modal for Rainbow tiles
+- Segment picker modal for Sniper tiles
+- Special tile spawning in procedural levels (5-20% based on difficulty)
+
+**Commits**:
+- Add special tiles system - Sniper, Rainbow, Aggro (Part 1)
+- Complete special tiles - Freeze, Bomb, Random, Mystery, Multiplier, Spin (Part 2)
+- Fix dragon projectile mechanics and bomb countdown
+- Add visual feedback for multiplier and spin tiles
 
 ---
 
@@ -171,10 +187,39 @@ From `roadmap_in_use.md` Section 2:
 
 ---
 
-#### 8. Daily Challenges ❌ NOT STARTED
-- [ ] Challenge generation system
-- [ ] Progress tracking
-- [ ] Reward distribution
+#### 8. Daily & Weekly Challenges ✅ COMPLETE
+From `roadmap_in_use.md` Section 3:
+
+**Implemented:**
+- [x] Daily Challenges (5 challenges)
+  - Segment Slayer: Remove 100 segments (200 coins)
+  - Level Master: Complete 3 levels (150 coins + 5 gems)
+  - Flawless Play: Complete 2 levels without undo (150 coins + 5 gems)
+  - Perfectionist: Achieve 3 perfect clears (10 gems)
+  - High Scorer: Earn 5,000 points total (100 coins)
+- [x] Weekly Challenges (4 challenges)
+  - Weekly Grind: Complete 25 levels (1000 coins)
+  - Dragon Destroyer: Remove 500 segments (500 coins + 50 gems)
+  - Combo King: Achieve 5x combo (100 gems)
+  - Dedication: Login 7 days in a row (500 coins + 20 gems)
+- [x] Daily Login Rewards (7-day streak)
+  - Days 1-7 with escalating rewards
+  - Day 7: 500 coins + 25 gems
+- [x] Progress Tracking System
+  - Baseline tracking (progress = current stats - baseline at reset)
+  - Automatic progress updates as player plays
+  - Daily reset at midnight
+  - Weekly reset on Monday
+- [x] Challenge UI (`components/DailyChallenge.tsx`)
+  - Login streak visualization (7-day grid)
+  - Progress bars for all challenges
+  - Time-until-reset countdowns
+  - Claim reward buttons
+- [x] localStorage persistence (`thread-unbound-challenges`)
+
+**Commits**:
+- Add daily and weekly challenges system with login streak
+- Implement challenge progress tracking with baseline system
 
 ---
 
@@ -183,42 +228,93 @@ From `roadmap_in_use.md` Section 2:
 
 ---
 
-#### 10. Permanent Upgrades Shop ✅ DONE
-*Already completed as part of Phase 1 Shop System*
+#### 10. Consumable Usage System ✅ COMPLETE
+From `roadmap_in_use.md` - Making purchased consumables usable during gameplay:
+
+**Implemented:**
+- [x] Chest Inventory Button
+  - Positioned above spools (centered between middle two)
+  - Opens inventory modal when clicked
+  - 🎁 icon with amber/yellow gradient
+- [x] Inventory Modal
+  - 2x2 grid layout (rainbow picker style)
+  - Shows all 4 consumables with count badges
+  - Disabled state when count = 0
+  - Color-coded backgrounds (blue, cyan, orange, purple)
+- [x] Extra Undo Consumable
+  - Adds current game state to history
+  - Grants +1 undo use for current level
+  - Immediate effect, no visual timer
+- [x] Freeze Time Consumable (5 seconds)
+  - Stops dragon growth completely
+  - Visual countdown timer above dragon ("❄️ Frozen: Xs")
+  - Timer updates every second
+  - Auto-expires after 5 seconds
+- [x] Conveyor Speed Consumable (30 seconds)
+  - 2x conveyor belt scroll speed (60px/s vs 30px/s)
+  - Visual countdown timer near conveyor ("💨 2x Speed: Xs")
+  - Timer updates every second
+  - Auto-expires after 30 seconds
+- [x] Reroll Grid Consumable
+  - Shuffles all grid blocks (keeps score/dragon)
+  - Purple flash overlay with spinning 🎲 emoji
+  - 400ms animation
+  - Adds to undo history
+
+**Technical Details:**
+- Timer re-rendering system (1-second interval when timers active)
+- `speedBoostActive` prop passed to ConveyorBelt component
+- Consumable state tracking with end times
+- Sound/haptic feedback on use
+- Inventory count decrements on use
+
+**Commits**:
+- Add consumable usage system - Part 1 (logic)
+- Complete consumable usage system - Part 2 (visuals & mechanics)
 
 ---
 
 ## 🎯 NEXT PRIORITIES
 
-### ✅ Phase 1 Complete! ✅ Section 2 Complete!
-All core foundation features and combo bonuses have been implemented.
+### ✅ Phase 1 Complete! ✅ Phase 2: 80% Complete!
+Core foundation, special tiles, combo system, and challenges are all implemented.
 
-### Immediate (Begin Phase 2)
-1. **Special Tiles** - Start with 3 tiles from Section 1:
-   - 🎯 Sniper Tile (click to target any dragon segment)
-   - 🌈 Rainbow Tile (choose color when placed in spool)
-   - 😡 Aggro Tile (3x dragon speed for 10 seconds)
+### Remaining Phase 2 Tasks
+1. **Leaderboards** *(Requires backend - may postpone)*
+   - Global all-time leaderboard
+   - Weekly leaderboard
+   - Friends leaderboard
+   - Level-specific leaderboards
 
-### Short-term
-2. **Daily Challenges** - Daily retention mechanic with rewards
-3. **More Special Tiles** - Add remaining tiles from Section 1
+### Phase 3: Long-term Engagement (0/7)
+From `roadmap_in_use.md`:
+1. **Prestige System** - Reset progression with permanent bonuses
+2. **Alternative Game Modes** - Endless, Time Attack, Puzzle, Zen, Hard Mode
+3. **Dragon Variants** - Different dragon types with unique behaviors
+4. **Boss Battles** - Special ultra-long dragons with phases
+5. **Event System** - Limited-time challenges and cosmetics
+6. **Social Features** - Share scores, friend challenges
+7. **Cosmetics Shop** - Dragon skins, kitty costumes, block themes
 
-### Medium-term (Continue Phase 2)
-4. **Dragon Variants** - Different dragon types with unique behaviors
-5. **Leaderboards** - Competitive element (may require backend)
+### Suggested Next Steps
+- **Option A**: Complete Phase 2 with Leaderboards (requires backend setup)
+- **Option B**: Start Phase 3 with Prestige System (endgame progression)
+- **Option C**: Polish existing features and bug fixes
+- **Option D**: Alternative game modes (Endless, Time Attack)
 
 ---
 
 ## 📝 TECHNICAL NOTES
 
 ### Current Architecture
-- **State Management**: React hooks in App.tsx
+- **State Management**: React hooks in App.tsx (considering Context API for growing state)
 - **Persistence**: localStorage for all game data
 - **Components**:
   - Game: Grid, BlockView, BufferArea, DragonView, ConveyorBelt, ThreadConnection
-  - Meta: StartMenu, Settings, Shop, Profile, Achievements, ComboIndicator, AchievementNotification
+  - Meta: StartMenu, Settings, Shop, Profile, Achievements, ComboIndicator, AchievementNotification, DailyChallenge
+  - Modals: Color picker (Rainbow), Segment picker (Sniper), Inventory (Consumables)
 - **Utils**: gameUtils, soundUtils, uuid
-- **Data**: shopItems, achievements, levels (LEVELS constant)
+- **Data**: shopItems, achievements, challenges, levels (LEVELS constant)
 
 ### localStorage Keys
 - `thread-unbound-progress`: Level progression
@@ -228,22 +324,39 @@ All core foundation features and combo bonuses have been implemented.
 - `thread-unbound-inventory`: Shop purchases
 - `thread-unbound-stats`: Player statistics
 - `thread-unbound-achievements`: Achievement progress and unlocks
+- `thread-unbound-challenges`: Daily/weekly challenges and login streak
 
 ### Known Technical Debt
-- Consider Context API or Redux for growing meta-progression state
-- Combo system needs Thread Master and Dragon Shrink Streak bonuses
+- Consider Context API or Redux for growing meta-progression state (30+ useState hooks in App.tsx)
+- Backend needed for leaderboards (currently all localStorage)
+- Challenge reset logic runs client-side (vulnerable to time manipulation)
 
 ---
 
-## 🐛 RECENT BUG FIXES
+## 🐛 RECENT BUG FIXES & UPDATES
+
+**Consumable System (Jan 2, 2025)**:
+- Implemented consumable usage mechanics (chest inventory modal)
+- Added timer re-rendering for Freeze Time and Conveyor Speed countdowns
+- Implemented 2x conveyor speed when boost active
+- Added visual flash effect for grid reroll
+
+**Daily/Weekly Challenges (Jan 2, 2025)**:
+- Implemented baseline tracking system for challenge progress
+- Daily reset at midnight, weekly reset on Monday
+- Login streak tracking with 7-day rewards
+- Challenge claim rewards with validation
+
+**Special Tiles (Jan 1-2, 2025)**:
+- Fixed dragon projectile targeting and animations
+- Fixed bomb countdown system (decrements on player actions, not time)
+- Implemented 9 special tile types with unique mechanics
+- Added crater system for bomb explosions
 
 **Statistics Tracking (Jan 1, 2025)**:
 - Fixed levelsAttempted counting on level load instead of first action
 - Fixed kitty rescue double-counting with guard refs
 - Added migration for existing stats where levelsAttempted < levelsCompleted
-
-**Combo System (Jan 1, 2025)**:
-- Removed efficiency bonus (not in roadmap, no par system planned)
 
 **Achievement System (Jan 1, 2025)**:
 - Implemented complete achievement system with 20 achievements
