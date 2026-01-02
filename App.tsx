@@ -967,8 +967,8 @@ export default function App() {
         return prevDragon;
       });
 
-      // FREEZE TILE SPITTING: 10% chance after dragon grows
-      if (dragonGrew && Math.random() < 0.1) {
+      // FREEZE TILE SPITTING: 5% chance after dragon grows
+      if (dragonGrew && Math.random() < 0.05) {
         const currentTime = Date.now();
         const timeSinceLastFreeze = currentTime - lastFreezeSpitTime;
 
@@ -1009,6 +1009,15 @@ export default function App() {
               setFreezeEffectEndTime(currentTime + 10000);
               setLastFreezeSpitTime(currentTime);
 
+              // Remove freeze tile from spool after 500ms (visual feedback, then clear)
+              setTimeout(() => {
+                setSpools(prev => {
+                  const cleared = [...prev];
+                  cleared[randomSpoolIdx] = { ...cleared[randomSpoolIdx], block: null };
+                  return cleared;
+                });
+              }, 500);
+
               return newSpools;
             }
 
@@ -1018,8 +1027,8 @@ export default function App() {
         }
       }
 
-      // BOMB SPITTING: 10% chance after dragon grows
-      if (dragonGrew && Math.random() < 0.1) {
+      // BOMB SPITTING: 5% chance after dragon grows
+      if (dragonGrew && Math.random() < 0.05) {
         const currentTime = Date.now();
         const timeSinceLastBomb = currentTime - lastBombSpitTime;
 
@@ -1849,6 +1858,14 @@ export default function App() {
     }
 
     // --- GRID LOGIC ---
+    // Bombs cannot be moved to spools - they only explode
+    if (block.type === 'bomb') {
+      playSound('error');
+      triggerHaptic([50, 50]);
+      console.log('💣 Bombs cannot be moved! They will explode after countdown.');
+      return;
+    }
+
     if (block.type === 'locked') {
       // Check if we have a matching key selected
       if (selectedKey && selectedKey.color === block.color) {
