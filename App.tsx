@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { RefreshCw, Play, Info, RotateCcw, Shuffle, Trophy, XCircle, Clock, Map, Coins, Gem } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 // Toast removed - no longer needed
-import { Block, Spool, BlockColor, Thread, GameState, DragonSegment, Kitty, PlayerCurrency, PlayerInventory, PlayerStats, PlayerAchievements, Crater } from './types';
+import { Block, Spool, BlockColor, Thread, GameState, DragonSegment, Kitty, PlayerCurrency, PlayerInventory, PlayerStats, PlayerAchievements, PlayerChallenges, Crater } from './types';
 import {
   GRID_SIZE,
   generateLevel,
@@ -28,8 +28,10 @@ import { Shop } from './components/Shop';
 import { Profile } from './components/Profile';
 import { Achievements } from './components/Achievements';
 import { ComboIndicator } from './components/ComboIndicator';
+import { DailyChallenge } from './components/DailyChallenge';
 import { SHOP_ITEMS } from './data/shopItems';
 import { ACHIEVEMENTS, getActiveAchievements } from './data/achievements';
+import { DAILY_CHALLENGES, WEEKLY_CHALLENGES, LOGIN_REWARDS } from './data/challenges';
 
 // LocalStorage keys
 const PROGRESS_KEY = 'thread-unbound-progress';
@@ -39,6 +41,7 @@ const COMPLETED_LEVELS_KEY = 'thread-unbound-completed-levels';
 const INVENTORY_KEY = 'thread-unbound-inventory';
 const STATS_KEY = 'thread-unbound-stats';
 const ACHIEVEMENTS_KEY = 'thread-unbound-achievements';
+const CHALLENGES_KEY = 'thread-unbound-challenges';
 
 type Screen = 'menu' | 'playing' | 'settings' | 'shop' | 'achievements' | 'leaderboards' | 'profile' | 'daily-challenge';
 
@@ -109,6 +112,18 @@ export default function App() {
     progress: {},
     unlocked: new Set(),
     recentlyUnlocked: [],
+  });
+
+  // Daily & Weekly Challenges
+  const [challenges, setChallenges] = useState<PlayerChallenges>({
+    dailyResetTime: Date.now(),
+    dailyProgress: {},
+    dailyCompleted: new Set(),
+    weeklyResetTime: Date.now(),
+    weeklyProgress: {},
+    weeklyCompleted: new Set(),
+    loginStreak: 0,
+    lastLoginDate: '',
   });
 
   // Game state
@@ -270,6 +285,93 @@ export default function App() {
         console.error('Failed to parse achievements:', e);
       }
     }
+
+    // Load challenges and check login streak
+    const savedChallenges = localStorage.getItem(CHALLENGES_KEY);
+    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+
+    if (savedChallenges) {
+      try {
+        const parsedChallenges = JSON.parse(savedChallenges);
+        // Convert Sets from arrays
+        const loadedChallenges: PlayerChallenges = {
+          ...parsedChallenges,
+          dailyCompleted: new Set(parsedChallenges.dailyCompleted || []),
+          weeklyCompleted: new Set(parsedChallenges.weeklyCompleted || []),
+        };
+
+        // Check if need to reset daily challenges (new day)
+        const lastReset = new Date(loadedChallenges.dailyResetTime);
+        const now = new Date();
+        if (now.toDateString() !== lastReset.toDateString()) {
+          // New day - reset daily challenges
+          loadedChallenges.dailyResetTime = Date.now();
+          loadedChallenges.dailyProgress = {};
+          loadedChallenges.dailyCompleted = new Set();
+        }
+
+        // Check if need to reset weekly challenges (new week = Monday)
+        const weeklyLastReset = new Date(loadedChallenges.weeklyResetTime);
+        const currentDay = now.getDay(); // 0 = Sunday, 1 = Monday
+        const daysSinceWeeklyReset = Math.floor((now.getTime() - weeklyLastReset.getTime()) / (1000 * 60 * 60 * 24));
+        if (daysSinceWeeklyReset >= 7 || (currentDay === 1 && weeklyLastReset.getDay() !== 1)) {
+          // New week - reset weekly challenges
+          loadedChallenges.weeklyResetTime = Date.now();
+          loadedChallenges.weeklyProgress = {};
+          loadedChallenges.weeklyCompleted = new Set();
+        }
+
+        // Update login streak
+        if (loadedChallenges.lastLoginDate !== today) {
+          const yesterday = new Date(now);
+          yesterday.setDate(yesterday.getDate() - 1);
+          const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+          if (loadedChallenges.lastLoginDate === yesterdayStr) {
+            // Consecutive day - increment streak
+            loadedChallenges.loginStreak += 1;
+          } else if (loadedChallenges.lastLoginDate === '') {
+            // First login ever
+            loadedChallenges.loginStreak = 1;
+          } else {
+            // Streak broken - reset to 1
+            loadedChallenges.loginStreak = 1;
+          }
+
+          loadedChallenges.lastLoginDate = today;
+
+          // Award daily login reward
+          const streakDay = Math.min(loadedChallenges.loginStreak, 7);
+          const reward = LOGIN_REWARDS[streakDay - 1];
+          if (reward) {
+            setCurrency(prev => ({
+              coins: prev.coins + reward.coins,
+              gems: prev.gems + reward.gems,
+            }));
+            console.log(`🎁 Login reward: +${reward.coins} coins, +${reward.gems} gems (Day ${streakDay})`);
+          }
+        }
+
+        setChallenges(loadedChallenges);
+      } catch (e) {
+        console.error('Failed to parse challenges:', e);
+      }
+    } else {
+      // First time - initialize login streak
+      setChallenges(prev => ({
+        ...prev,
+        loginStreak: 1,
+        lastLoginDate: today,
+      }));
+
+      // Award day 1 login reward
+      const reward = LOGIN_REWARDS[0];
+      setCurrency(prev => ({
+        coins: prev.coins + reward.coins,
+        gems: prev.gems + reward.gems,
+      }));
+      console.log(`🎁 First login reward: +${reward.coins} coins, +${reward.gems} gems`);
+    }
   }, []);
 
   // Save settings to localStorage when they change
@@ -306,6 +408,16 @@ export default function App() {
     };
     localStorage.setItem(ACHIEVEMENTS_KEY, JSON.stringify(achievementsToSave));
   }, [achievements]);
+
+  // Save challenges to localStorage when they change
+  useEffect(() => {
+    const challengesToSave = {
+      ...challenges,
+      dailyCompleted: Array.from(challenges.dailyCompleted),
+      weeklyCompleted: Array.from(challenges.weeklyCompleted),
+    };
+    localStorage.setItem(CHALLENGES_KEY, JSON.stringify(challengesToSave));
+  }, [challenges]);
 
   // Track play time (update every 10 seconds while playing)
   useEffect(() => {
