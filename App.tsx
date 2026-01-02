@@ -900,6 +900,23 @@ export default function App() {
     setRecentlyFiredSpools(new Set());
     setLastSpoolFireTime(0);
 
+    // Reset all special tile effects and timers
+    setFreezeEffectActive(false);
+    setFreezeEffectEndTime(0);
+    setLastFreezeSpitTime(0);
+    setAggroEffectActive(false);
+    setAggroEffectEndTime(0);
+    setLastAggroSpitTime(0);
+    setDragonUnder5StartTime(0);
+    setMultiplierEffectActive(false);
+    setMultiplierEffectEndTime(0);
+    setCraters([]); // Clear all craters/burned areas
+    setLastBombSpitTime(0);
+    setSelectedSniper(null); // Clear sniper selection
+    setSelectedRainbow(null); // Clear rainbow selection
+    setDragonProjectiles([]); // Clear any projectile animations
+    setMultiplierPopup(null); // Clear multiplier popup
+
     // Note: levelsAttempted is tracked on first player action, not on level load
 
     // Starting Undo upgrade: Give 1 undo at start
