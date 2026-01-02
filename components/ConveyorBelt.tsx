@@ -9,11 +9,13 @@ interface ConveyorBeltProps {
   hiddenIds: Set<string>;
   onBlockClick: (block: Block) => void;
   onBlockScrolledOff?: (block: Block) => void;
+  speedBoostActive?: boolean; // 2x speed when true
 }
 
-export const ConveyorBelt: React.FC<ConveyorBeltProps> = ({ blocks, hiddenIds, onBlockClick, onBlockScrolledOff }) => {
+export const ConveyorBelt: React.FC<ConveyorBeltProps> = ({ blocks, hiddenIds, onBlockClick, onBlockScrolledOff, speedBoostActive = false }) => {
   const blockWidth = 56; // 48px block + 8px gap
-  const scrollSpeed = 30; // pixels per second
+  const baseScrollSpeed = 30; // pixels per second
+  const scrollSpeed = speedBoostActive ? baseScrollSpeed * 2 : baseScrollSpeed; // 2x speed when boost active
   const startPosition = 450; // Where blocks start (right edge)
 
   // Track continuous scroll offset

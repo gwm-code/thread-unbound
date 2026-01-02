@@ -196,6 +196,7 @@ export default function App() {
   const [conveyorSpeedActive, setConveyorSpeedActive] = useState(false); // Conveyor Speed consumable - 2x speed
   const [conveyorSpeedEndTime, setConveyorSpeedEndTime] = useState<number>(0);
   const [availableUndos, setAvailableUndos] = useState(0); // Extra undos available from consumables
+  const [rerollFlash, setRerollFlash] = useState(false); // Visual flash when grid rerolls
 
   // Load progress, settings, and currency from localStorage on mount
   useEffect(() => {
@@ -882,6 +883,20 @@ export default function App() {
     updateChallengeProgress();
   }, [updateChallengeProgress]);
 
+  // Force re-render every second while timers are active (for countdown displays)
+  const [timerTick, setTimerTick] = useState(0);
+  useEffect(() => {
+    if (!dragonFrozen && !conveyorSpeedActive && !aggroEffectActive && !freezeEffectActive && !multiplierEffectActive) {
+      return; // No timers active
+    }
+
+    const interval = setInterval(() => {
+      setTimerTick(prev => prev + 1);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [dragonFrozen, conveyorSpeedActive, aggroEffectActive, freezeEffectActive, multiplierEffectActive]);
+
   // Use consumable from inventory
   const useConsumable = (consumableId: string) => {
     console.log('Using consumable:', consumableId);
@@ -950,7 +965,9 @@ export default function App() {
         setBlocks(newBlocks);
         setInventory(prev => ({ ...prev, rerollGrid: prev.rerollGrid - 1 }));
         console.log('🎲 Grid rerolled!');
-        // TODO: Add visual effect
+        // Trigger visual flash effect
+        setRerollFlash(true);
+        setTimeout(() => setRerollFlash(false), 400);
         break;
 
       default:
@@ -2644,13 +2661,32 @@ export default function App() {
       {/* Main Game Area */}
       <main className="w-full max-w-4xl mx-auto px-2 flex flex-col items-center gap-2 relative z-10">
         {/* Dragon - More compact */}
-        <DragonView
-          segments={dragon}
-          kitty={kitty}
-        />
+        <div className="relative w-full flex justify-center">
+          <DragonView
+            segments={dragon}
+            kitty={kitty}
+          />
 
-        {/* Spools - Horizontal at top of grid */}
-        <div className="w-full flex justify-center py-1 z-30">
+          {/* Freeze Time Timer */}
+          {dragonFrozen && (
+            <div className="absolute top-2 left-1/2 transform -translate-x-1/2 bg-cyan-500/90 text-white px-3 py-1 rounded-full font-bold text-sm shadow-lg animate-pulse">
+              ❄️ Frozen: {Math.ceil((dragonFrozenEndTime - Date.now()) / 1000)}s
+            </div>
+          )}
+        </div>
+
+        {/* Chest Button + Spools */}
+        <div className="w-full flex flex-col items-center py-1 z-30">
+          {/* Chest Button - Centered above spools */}
+          <button
+            onClick={() => setShowInventory(true)}
+            className="mb-1 p-2 bg-gradient-to-br from-amber-600 to-yellow-700 rounded-lg shadow-lg hover:scale-110 active:scale-95 transition-all border-2 border-yellow-500"
+            title="Open Inventory"
+          >
+            <div className="text-2xl">🎁</div>
+          </button>
+
+          {/* Spools */}
           <BufferArea slots={spools} isFrozen={freezeEffectActive} />
         </div>
 
@@ -2664,6 +2700,18 @@ export default function App() {
             aggroTileId={blocks.find(b => b.type === 'aggro')?.id || null}
             craters={craters}
           />
+
+          {/* Reroll Flash Effect */}
+          {rerollFlash && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: [0, 0.8, 0] }}
+              transition={{ duration: 0.4, ease: "easeInOut" }}
+              className="absolute inset-0 bg-purple-500 rounded-lg pointer-events-none z-50 flex items-center justify-center"
+            >
+              <div className="text-6xl animate-spin">🎲</div>
+            </motion.div>
+          )}
 
           {/* Multiplier Popup - Mario 1-Up style */}
           {multiplierPopup && (
@@ -2745,12 +2793,20 @@ export default function App() {
         </AnimatePresence>
 
         {/* Conveyor Belt - More spacing from grid to prevent overlap */}
-        <div className="w-full pt-3 pb-1">
+        <div className="w-full pt-3 pb-1 relative">
+          {/* Conveyor Speed Timer */}
+          {conveyorSpeedActive && (
+            <div className="absolute top-0 right-4 bg-orange-500/90 text-white px-3 py-1 rounded-full font-bold text-sm shadow-lg animate-pulse z-50">
+              💨 2x Speed: {Math.ceil((conveyorSpeedEndTime - Date.now()) / 1000)}s
+            </div>
+          )}
+
           <ConveyorBelt
             blocks={conveyorBlocks}
             hiddenIds={hiddenConveyorIds}
             onBlockClick={(b) => handleBlockClick(b, 'conveyor')}
             onBlockScrolledOff={handleBlockScrolledOff}
+            speedBoostActive={conveyorSpeedActive}
           />
         </div>
       </main>
@@ -2884,6 +2940,104 @@ export default function App() {
                 Cancel
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* INVENTORY MODAL */}
+      {showInventory && (
+        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center p-6 pointer-events-none">
+          <div className="bg-slate-800/95 backdrop-blur-md rounded-2xl shadow-2xl p-6 border-2 border-amber-500 pointer-events-auto max-w-md w-full">
+            <div className="text-center text-white mb-4">
+              <div className="text-5xl mb-3">🎁</div>
+              <h2 className="text-2xl font-bold mb-2">Inventory</h2>
+              <p className="text-white/80 mb-4">Select a consumable to use</p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              {/* Extra Undo */}
+              <button
+                onClick={() => useConsumable('extra-undo')}
+                disabled={inventory.extraUndos === 0}
+                className={`
+                  relative p-4 rounded-xl border-4 shadow-lg transition-all
+                  ${inventory.extraUndos > 0
+                    ? 'bg-blue-600 border-blue-400 hover:scale-105 hover:border-white active:scale-95'
+                    : 'bg-slate-600 border-slate-500 opacity-50 cursor-not-allowed'
+                  }
+                `}
+              >
+                <div className="text-4xl mb-2">🔄</div>
+                <div className="text-white font-bold text-sm">Extra Undo</div>
+                <div className="absolute top-1 right-1 bg-black/70 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold">
+                  {inventory.extraUndos}
+                </div>
+              </button>
+
+              {/* Freeze Time */}
+              <button
+                onClick={() => useConsumable('freeze-time')}
+                disabled={inventory.freezeTime === 0}
+                className={`
+                  relative p-4 rounded-xl border-4 shadow-lg transition-all
+                  ${inventory.freezeTime > 0
+                    ? 'bg-cyan-600 border-cyan-400 hover:scale-105 hover:border-white active:scale-95'
+                    : 'bg-slate-600 border-slate-500 opacity-50 cursor-not-allowed'
+                  }
+                `}
+              >
+                <div className="text-4xl mb-2">⏸️</div>
+                <div className="text-white font-bold text-sm">Freeze Time</div>
+                <div className="absolute top-1 right-1 bg-black/70 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold">
+                  {inventory.freezeTime}
+                </div>
+              </button>
+
+              {/* Conveyor Speed */}
+              <button
+                onClick={() => useConsumable('conveyor-speed')}
+                disabled={inventory.conveyorSpeed === 0}
+                className={`
+                  relative p-4 rounded-xl border-4 shadow-lg transition-all
+                  ${inventory.conveyorSpeed > 0
+                    ? 'bg-orange-600 border-orange-400 hover:scale-105 hover:border-white active:scale-95'
+                    : 'bg-slate-600 border-slate-500 opacity-50 cursor-not-allowed'
+                  }
+                `}
+              >
+                <div className="text-4xl mb-2">💨</div>
+                <div className="text-white font-bold text-sm">Conveyor Speed</div>
+                <div className="absolute top-1 right-1 bg-black/70 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold">
+                  {inventory.conveyorSpeed}
+                </div>
+              </button>
+
+              {/* Reroll Grid */}
+              <button
+                onClick={() => useConsumable('reroll-grid')}
+                disabled={inventory.rerollGrid === 0}
+                className={`
+                  relative p-4 rounded-xl border-4 shadow-lg transition-all
+                  ${inventory.rerollGrid > 0
+                    ? 'bg-purple-600 border-purple-400 hover:scale-105 hover:border-white active:scale-95'
+                    : 'bg-slate-600 border-slate-500 opacity-50 cursor-not-allowed'
+                  }
+                `}
+              >
+                <div className="text-4xl mb-2">🎲</div>
+                <div className="text-white font-bold text-sm">Reroll Grid</div>
+                <div className="absolute top-1 right-1 bg-black/70 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold">
+                  {inventory.rerollGrid}
+                </div>
+              </button>
+            </div>
+
+            <button
+              onClick={() => setShowInventory(false)}
+              className="w-full px-6 py-2 bg-slate-600 text-white font-bold rounded-xl hover:bg-slate-700 active:scale-95 transition-all"
+            >
+              Close
+            </button>
           </div>
         </div>
       )}
