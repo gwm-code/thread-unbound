@@ -1736,29 +1736,49 @@ export default function App() {
     addScore(25); // Bonus for using spin
   };
 
-  // Handle Rainbow tile: Choose a color (omni-directional, bypasses path checks)
+  // Handle Rainbow tile: Choose a color and move to spool (omni-directional, bypasses path checks)
   const handleRainbowColorSelect = (color: BlockColor) => {
     if (!selectedRainbow) return;
 
-    console.log(`🌈 Rainbow tile changed to ${color}`);
+    console.log(`🌈 Rainbow tile changed to ${color} and moving to spool`);
     pushHistory();
     playSound('move');
     triggerHaptic(10);
+
+    // Find first empty spool
+    const emptySpoolIndex = spools.findIndex(s => s.block === null);
+    if (emptySpoolIndex === -1) {
+      console.log('⚠️ No empty spool available');
+      playSound('error');
+      triggerHaptic(50);
+      setSelectedRainbow(null);
+      return;
+    }
 
     // Convert rainbow tile to normal tile with chosen color
     const normalizedTile: Block = {
       ...selectedRainbow,
       type: 'normal',
       color: color,
-      threadCount: selectedRainbow.threadCount || 6, // Default thread count
+      threadCount: selectedRainbow.threadCount, // Keep original thread count
     };
 
-    // Replace rainbow tile with normal colored tile
-    setBlocks(prev => prev.map(b => b.id === selectedRainbow.id ? normalizedTile : b));
+    // Remove rainbow tile from grid
+    setBlocks(prev => prev.filter(b => b.id !== selectedRainbow.id));
+
+    // Add converted tile to spool
+    setSpools(prev => {
+      const updated = [...prev];
+      updated[emptySpoolIndex] = { ...updated[emptySpoolIndex], block: normalizedTile };
+      return updated;
+    });
 
     // Clear selection
     setSelectedRainbow(null);
     registerComboAction();
+
+    // Randomize random tiles after move
+    randomizeRandomTileDirections();
   };
 
   // Handle Sniper tile: Remove any board tile (bombs, hazards, locked tiles, etc.)

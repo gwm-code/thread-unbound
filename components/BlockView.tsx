@@ -227,8 +227,8 @@ export const BlockView: React.FC<BlockViewProps> = ({
         )}
       </div>
 
-      {/* Thread Count Badge - Bottom Right Corner (only for normal tiles) */}
-      {!isKey && !isSniper && !isRainbow && !isAggro && !isSpin && !isMultiplier && !isMystery && !isFreeze && !isBomb && (
+      {/* Thread Count Badge - Bottom Right Corner (only for normal tiles and rainbow) */}
+      {!isKey && !isSniper && !isAggro && !isSpin && !isMultiplier && !isMystery && !isFreeze && !isBomb && (
         <div className="absolute bottom-0.5 right-0.5 bg-black/70 text-white rounded-full w-4 h-4 flex items-center justify-center text-[8px] font-bold z-20">
           {block.threadCount}
         </div>
