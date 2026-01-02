@@ -174,11 +174,13 @@ export interface PlayerChallenges {
   dailyResetTime: number; // Timestamp of last daily reset
   dailyProgress: Record<string, number>; // Challenge ID -> progress
   dailyCompleted: Set<string>; // Completed challenge IDs for today
+  dailyBaseline: Record<string, number>; // Stat values when daily reset happened
 
   // Weekly challenges reset on Monday
   weeklyResetTime: number; // Timestamp of last weekly reset
   weeklyProgress: Record<string, number>; // Challenge ID -> progress
   weeklyCompleted: Set<string>; // Completed challenge IDs for this week
+  weeklyBaseline: Record<string, number>; // Stat values when weekly reset happened
 
   // Daily login streak
   loginStreak: number; // Consecutive days logged in

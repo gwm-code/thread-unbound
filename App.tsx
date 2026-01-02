@@ -119,9 +119,11 @@ export default function App() {
     dailyResetTime: Date.now(),
     dailyProgress: {},
     dailyCompleted: new Set(),
+    dailyBaseline: {},
     weeklyResetTime: Date.now(),
     weeklyProgress: {},
     weeklyCompleted: new Set(),
+    weeklyBaseline: {},
     loginStreak: 0,
     lastLoginDate: '',
   });
@@ -298,16 +300,32 @@ export default function App() {
           ...parsedChallenges,
           dailyCompleted: new Set(parsedChallenges.dailyCompleted || []),
           weeklyCompleted: new Set(parsedChallenges.weeklyCompleted || []),
+          dailyBaseline: parsedChallenges.dailyBaseline || {},
+          weeklyBaseline: parsedChallenges.weeklyBaseline || {},
         };
 
         // Check if need to reset daily challenges (new day)
         const lastReset = new Date(loadedChallenges.dailyResetTime);
         const now = new Date();
         if (now.toDateString() !== lastReset.toDateString()) {
-          // New day - reset daily challenges
+          // New day - reset daily challenges and store current stat baselines
           loadedChallenges.dailyResetTime = Date.now();
           loadedChallenges.dailyProgress = {};
           loadedChallenges.dailyCompleted = new Set();
+          // Store baseline from saved stats if available
+          const savedStats = localStorage.getItem(STATS_KEY);
+          if (savedStats) {
+            const parsedStats = JSON.parse(savedStats);
+            loadedChallenges.dailyBaseline = {
+              levelsCompleted: parsedStats.levelsCompleted || 0,
+              totalSegmentsRemoved: parsedStats.totalSegmentsRemoved || 0,
+              noUndoCompletions: parsedStats.noUndoCompletions || 0,
+              perfectClears: parsedStats.perfectClears || 0,
+              maxComboReached: parsedStats.maxComboReached || 0,
+            };
+          } else {
+            loadedChallenges.dailyBaseline = {};
+          }
         }
 
         // Check if need to reset weekly challenges (new week = Monday)
@@ -315,10 +333,22 @@ export default function App() {
         const currentDay = now.getDay(); // 0 = Sunday, 1 = Monday
         const daysSinceWeeklyReset = Math.floor((now.getTime() - weeklyLastReset.getTime()) / (1000 * 60 * 60 * 24));
         if (daysSinceWeeklyReset >= 7 || (currentDay === 1 && weeklyLastReset.getDay() !== 1)) {
-          // New week - reset weekly challenges
+          // New week - reset weekly challenges and store current stat baselines
           loadedChallenges.weeklyResetTime = Date.now();
           loadedChallenges.weeklyProgress = {};
           loadedChallenges.weeklyCompleted = new Set();
+          // Store baseline from saved stats if available
+          const savedStats = localStorage.getItem(STATS_KEY);
+          if (savedStats) {
+            const parsedStats = JSON.parse(savedStats);
+            loadedChallenges.weeklyBaseline = {
+              levelsCompleted: parsedStats.levelsCompleted || 0,
+              totalSegmentsRemoved: parsedStats.totalSegmentsRemoved || 0,
+              maxComboReached: parsedStats.maxComboReached || 0,
+            };
+          } else {
+            loadedChallenges.weeklyBaseline = {};
+          }
         }
 
         // Update login streak
@@ -415,6 +445,7 @@ export default function App() {
       ...challenges,
       dailyCompleted: Array.from(challenges.dailyCompleted),
       weeklyCompleted: Array.from(challenges.weeklyCompleted),
+      // Baselines are already objects, no need to convert
     };
     localStorage.setItem(CHALLENGES_KEY, JSON.stringify(challengesToSave));
   }, [challenges]);
@@ -790,6 +821,105 @@ export default function App() {
 
   const handleBackToMenu = () => {
     setCurrentScreen('menu');
+  };
+
+  // Update challenge progress based on stats
+  const updateChallengeProgress = useCallback(() => {
+    setChallenges(prev => {
+      const newDailyProgress = { ...prev.dailyProgress };
+      const newWeeklyProgress = { ...prev.weeklyProgress };
+
+      // Update daily challenge progress
+      DAILY_CHALLENGES.forEach(challenge => {
+        // Special handling for login streak challenge
+        if (challenge.id === 'daily-streak') {
+          newDailyProgress[challenge.id] = prev.loginStreak;
+          return;
+        }
+
+        // Get current and baseline values
+        const currentValue = stats[challenge.progressKey] || 0;
+        const baselineValue = prev.dailyBaseline[challenge.progressKey] || 0;
+
+        // Calculate progress since daily reset (delta)
+        newDailyProgress[challenge.id] = Math.max(0, currentValue - baselineValue);
+      });
+
+      // Update weekly challenge progress
+      WEEKLY_CHALLENGES.forEach(challenge => {
+        // Special handling for login streak challenge
+        if (challenge.id === 'weekly-streak') {
+          newWeeklyProgress[challenge.id] = prev.loginStreak;
+          return;
+        }
+
+        // Get current and baseline values
+        const currentValue = stats[challenge.progressKey] || 0;
+        const baselineValue = prev.weeklyBaseline[challenge.progressKey] || 0;
+
+        // Calculate progress since weekly reset (delta)
+        newWeeklyProgress[challenge.id] = Math.max(0, currentValue - baselineValue);
+      });
+
+      return {
+        ...prev,
+        dailyProgress: newDailyProgress,
+        weeklyProgress: newWeeklyProgress,
+      };
+    });
+  }, [stats]);
+
+  // Update challenge progress whenever stats change
+  useEffect(() => {
+    updateChallengeProgress();
+  }, [updateChallengeProgress]);
+
+  // Claim challenge reward
+  const handleClaimReward = (challengeId: string) => {
+    console.log('Claiming reward for challenge:', challengeId);
+
+    // Find the challenge
+    const allChallenges = [...DAILY_CHALLENGES, ...WEEKLY_CHALLENGES];
+    const challenge = allChallenges.find(c => c.id === challengeId);
+    if (!challenge) return;
+
+    const isDaily = challenge.type === 'daily';
+
+    // Check if already claimed
+    if (isDaily && challenges.dailyCompleted.has(challengeId)) {
+      console.log('Already claimed this daily challenge');
+      return;
+    }
+    if (!isDaily && challenges.weeklyCompleted.has(challengeId)) {
+      console.log('Already claimed this weekly challenge');
+      return;
+    }
+
+    // Award coins and gems
+    if (challenge.rewardCoins) {
+      addCoins(challenge.rewardCoins);
+      console.log(`+${challenge.rewardCoins} coins from challenge`);
+    }
+    if (challenge.rewardGems) {
+      addGems(challenge.rewardGems);
+      console.log(`+${challenge.rewardGems} gems from challenge`);
+    }
+
+    // Mark as claimed
+    if (isDaily) {
+      setChallenges(prev => ({
+        ...prev,
+        dailyCompleted: new Set([...prev.dailyCompleted, challengeId]),
+      }));
+    } else {
+      setChallenges(prev => ({
+        ...prev,
+        weeklyCompleted: new Set([...prev.weeklyCompleted, challengeId]),
+      }));
+    }
+
+    playSound('success');
+    triggerHaptic(100);
   };
 
   const handleResetProgress = () => {
@@ -2322,8 +2452,20 @@ export default function App() {
     );
   }
 
+  if (currentScreen === 'daily-challenge') {
+    return (
+      <DailyChallenge
+        challenges={challenges}
+        stats={stats}
+        currency={currency}
+        onClose={handleBackToMenu}
+        onClaimReward={handleClaimReward}
+      />
+    );
+  }
+
   // Placeholder screens for future features
-  if (currentScreen === 'leaderboards' || currentScreen === 'daily-challenge') {
+  if (currentScreen === 'leaderboards') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex flex-col items-center justify-center p-4">
         <div className="text-center text-white">
