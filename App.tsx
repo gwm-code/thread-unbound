@@ -155,6 +155,7 @@ export default function App() {
 
   // Special Tiles State
   const [selectedSniper, setSelectedSniper] = useState<Block | null>(null); // Sniper tile awaiting target selection
+  const [selectedRainbow, setSelectedRainbow] = useState<Block | null>(null); // Rainbow tile awaiting color selection
   const [aggroEffectActive, setAggroEffectActive] = useState(false); // Aggro 3x speed effect active
   const [aggroEffectEndTime, setAggroEffectEndTime] = useState<number>(0);
   const [lastAggroSpitTime, setLastAggroSpitTime] = useState<number>(0); // For 30s cooldown
@@ -1667,6 +1668,31 @@ export default function App() {
     addScore(25); // Bonus for using spin
   };
 
+  // Handle Rainbow tile: Choose a color (omni-directional, bypasses path checks)
+  const handleRainbowColorSelect = (color: BlockColor) => {
+    if (!selectedRainbow) return;
+
+    console.log(`🌈 Rainbow tile changed to ${color}`);
+    pushHistory();
+    playSound('move');
+    triggerHaptic(10);
+
+    // Convert rainbow tile to normal tile with chosen color
+    const normalizedTile: Block = {
+      ...selectedRainbow,
+      type: 'normal',
+      color: color,
+      threadCount: selectedRainbow.threadCount || 6, // Default thread count
+    };
+
+    // Replace rainbow tile with normal colored tile
+    setBlocks(prev => prev.map(b => b.id === selectedRainbow.id ? normalizedTile : b));
+
+    // Clear selection
+    setSelectedRainbow(null);
+    registerComboAction();
+  };
+
   // Handle Sniper tile: Remove any board tile (bombs, hazards, locked tiles, etc.)
   const handleSniperTarget = (targetBlock: Block) => {
     if (!selectedSniper) return;
@@ -1761,6 +1787,15 @@ export default function App() {
 
         registerComboAction();
         addScore(30); // Bonus for using multiplier
+        return;
+      }
+
+      // RAINBOW TILE: Enter color selection mode (omni-directional)
+      if (block.type === 'rainbow') {
+        console.log('🌈 Rainbow tile clicked! Select a color.');
+        setSelectedRainbow(block);
+        playSound('move');
+        triggerHaptic(10);
         return;
       }
 
@@ -2311,6 +2346,44 @@ export default function App() {
                 Cancel
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* RAINBOW COLOR SELECTION OVERLAY */}
+      {selectedRainbow && (
+        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center p-6 pointer-events-none">
+          <div className="bg-slate-800/95 backdrop-blur-md rounded-2xl shadow-2xl p-6 border-2 border-slate-600 pointer-events-auto">
+            <div className="text-center text-white mb-4">
+              <div className="text-5xl mb-3">🌈</div>
+              <h2 className="text-2xl font-bold mb-2">Rainbow Tile</h2>
+              <p className="text-white/80 mb-4">Choose a color (omni-directional)</p>
+            </div>
+
+            <div className="flex gap-3 mb-4">
+              {(['red', 'blue', 'green', 'yellow', 'purple'] as BlockColor[]).map(color => (
+                <button
+                  key={color}
+                  onClick={() => handleRainbowColorSelect(color)}
+                  className={`
+                    w-16 h-16 rounded-xl border-4 border-white/50 shadow-lg
+                    hover:scale-110 hover:border-white active:scale-95 transition-all
+                    ${color === 'red' ? 'bg-red-500' : ''}
+                    ${color === 'blue' ? 'bg-blue-500' : ''}
+                    ${color === 'green' ? 'bg-emerald-500' : ''}
+                    ${color === 'yellow' ? 'bg-amber-400' : ''}
+                    ${color === 'purple' ? 'bg-violet-500' : ''}
+                  `}
+                />
+              ))}
+            </div>
+
+            <button
+              onClick={() => setSelectedRainbow(null)}
+              className="w-full px-6 py-2 bg-slate-600 text-white font-bold rounded-xl hover:bg-slate-700 active:scale-95 transition-all"
+            >
+              Cancel
+            </button>
           </div>
         </div>
       )}
