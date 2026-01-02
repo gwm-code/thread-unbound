@@ -618,6 +618,7 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [freezeEffectActive, freezeEffectEndTime]);
 
+
   // Thread Master bonus: Clear recently fired spools after 3 seconds
   useEffect(() => {
     if (recentlyFiredSpools.size === 0) return;
@@ -967,8 +968,8 @@ export default function App() {
         return prevDragon;
       });
 
-      // FREEZE TILE SPITTING: 5% chance after dragon grows
-      if (dragonGrew && Math.random() < 0.05) {
+      // FREEZE TILE SPITTING: 2% chance after dragon grows
+      if (dragonGrew && Math.random() < 0.02) {
         const currentTime = Date.now();
         const timeSinceLastFreeze = currentTime - lastFreezeSpitTime;
 
@@ -1027,8 +1028,8 @@ export default function App() {
         }
       }
 
-      // BOMB SPITTING: 5% chance after dragon grows
-      if (dragonGrew && Math.random() < 0.05) {
+      // BOMB SPITTING: 2% chance after dragon grows
+      if (dragonGrew && Math.random() < 0.02) {
         const currentTime = Date.now();
         const timeSinceLastBomb = currentTime - lastBombSpitTime;
 
@@ -1061,11 +1062,16 @@ export default function App() {
               direction: 'DOWN',
               type: 'bomb',
               threadCount: 0, // Doesn't remove segments
-              countdown: 3, // 3 moves until explosion
+              countdown: Date.now() + 5000, // Explodes in 5 seconds (timestamp)
             };
 
             setBlocks(prev => [...prev, bombTile]);
             setLastBombSpitTime(currentTime);
+
+            // Schedule bomb explosion after 5 seconds
+            setTimeout(() => {
+              handleBombExplosion(bombTile);
+            }, 5000);
           }
         }
       }
@@ -1939,24 +1945,8 @@ export default function App() {
     playSound('move');
     triggerHaptic(10);
 
-    // Decrement bomb countdowns and handle explosions
-    setBlocks(prev => {
-      const updated = prev.map(b => {
-        if (b.type === 'bomb' && b.countdown !== undefined) {
-          const newCountdown = b.countdown - 1;
-          if (newCountdown <= 0) {
-            // Schedule explosion for this bomb
-            setTimeout(() => handleBombExplosion(b), 100);
-            return null; // Will be filtered out
-          }
-          return { ...b, countdown: newCountdown };
-        }
-        return b;
-      }).filter((b): b is Block => b !== null);
-
-      // Remove the clicked block
-      return updated.filter(b => b.id !== block.id);
-    });
+    // Remove the clicked block from grid
+    setBlocks(prev => prev.filter(b => b.id !== block.id));
 
     // Decrement crater turns
     setCraters(prev => {

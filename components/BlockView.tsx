@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Lock, Key } from 'lucide-react';
 import { Block, Direction, BlockColor } from '../types';
@@ -72,6 +72,27 @@ export const BlockView: React.FC<BlockViewProps> = ({
   const isFreeze = block.type === 'freeze';
   const isBomb = block.type === 'bomb';
   const isUnlocking = !!block.justUnlocked;
+
+  // Bomb countdown display (time-based)
+  const [bombSecondsLeft, setBombSecondsLeft] = useState(0);
+
+  useEffect(() => {
+    if (!isBomb || block.countdown === undefined) return;
+
+    // Update countdown every 100ms
+    const interval = setInterval(() => {
+      const timeLeft = block.countdown! - Date.now();
+      const secondsLeft = Math.max(0, Math.ceil(timeLeft / 1000));
+      setBombSecondsLeft(secondsLeft);
+    }, 100);
+
+    // Initial set
+    const timeLeft = block.countdown - Date.now();
+    const secondsLeft = Math.max(0, Math.ceil(timeLeft / 1000));
+    setBombSecondsLeft(secondsLeft);
+
+    return () => clearInterval(interval);
+  }, [isBomb, block.countdown]);
 
   // Size scaling based on thread count: 4=0.85, 6=0.95, 8=1.05, 10=1.15
   const sizeScale = 0.70 + (block.threadCount / 20); // 4→0.90, 6→0.95, 8→1.10, 10→1.20
@@ -197,9 +218,9 @@ export const BlockView: React.FC<BlockViewProps> = ({
         ) : isBomb ? (
           <div className="relative">
             <div className="text-2xl drop-shadow-md animate-bounce">💣</div>
-            {block.countdown !== undefined && (
+            {bombSecondsLeft > 0 && (
               <div className="absolute -top-1 -right-1 bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs font-bold animate-pulse">
-                {block.countdown}
+                {bombSecondsLeft}
               </div>
             )}
           </div>
