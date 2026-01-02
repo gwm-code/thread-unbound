@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect, useMemo } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { Block, GridSize, Crater } from '../types';
 import { BlockView } from './BlockView';
 import { AnimatePresence } from 'framer-motion';
@@ -15,6 +15,7 @@ interface GridProps {
 export const Grid: React.FC<GridProps> = ({ blocks, gridSize, onBlockClick, selectedKeyId, aggroTileId, craters = [] }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [cellSize, setCellSize] = useState(60);
+  const [craterSeconds, setCraterSeconds] = useState<Record<string, number>>({});
 
   // Responsive cell size calculation
   useEffect(() => {
@@ -30,6 +31,32 @@ export const Grid: React.FC<GridProps> = ({ blocks, gridSize, onBlockClick, sele
     window.addEventListener('resize', updateSize);
     return () => window.removeEventListener('resize', updateSize);
   }, [gridSize.cols]);
+
+  // Update crater countdown displays every 100ms
+  useEffect(() => {
+    if (craters.length === 0) return;
+
+    const interval = setInterval(() => {
+      const now = Date.now();
+      const newSeconds: Record<string, number> = {};
+      craters.forEach(crater => {
+        const timeLeft = crater.expiresAt - now;
+        newSeconds[crater.id] = Math.max(0, Math.ceil(timeLeft / 1000));
+      });
+      setCraterSeconds(newSeconds);
+    }, 100);
+
+    // Initial set
+    const now = Date.now();
+    const newSeconds: Record<string, number> = {};
+    craters.forEach(crater => {
+      const timeLeft = crater.expiresAt - now;
+      newSeconds[crater.id] = Math.max(0, Math.ceil(timeLeft / 1000));
+    });
+    setCraterSeconds(newSeconds);
+
+    return () => clearInterval(interval);
+  }, [craters]);
 
   return (
     <div className="flex justify-center items-center w-full">
@@ -66,9 +93,11 @@ export const Grid: React.FC<GridProps> = ({ blocks, gridSize, onBlockClick, sele
             }}
           >
             <div className="text-xs font-bold text-white/50">💥</div>
-            <div className="absolute bottom-0.5 right-0.5 bg-red-600 text-white rounded-full w-4 h-4 flex items-center justify-center text-[8px] font-bold">
-              {crater.turnsRemaining}
-            </div>
+            {craterSeconds[crater.id] !== undefined && craterSeconds[crater.id] > 0 && (
+              <div className="absolute bottom-0.5 right-0.5 bg-red-600 text-white rounded-full w-4 h-4 flex items-center justify-center text-[8px] font-bold animate-pulse">
+                {craterSeconds[crater.id]}
+              </div>
+            )}
           </div>
         ))}
 

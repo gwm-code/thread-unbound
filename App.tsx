@@ -619,6 +619,19 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [freezeEffectActive, freezeEffectEndTime]);
 
+  // --- CRATER AUTO-CLEANUP ---
+  // Remove expired craters every 500ms
+  useEffect(() => {
+    if (craters.length === 0) return;
+
+    const interval = setInterval(() => {
+      const now = Date.now();
+      setCraters(prev => prev.filter(c => c.expiresAt > now));
+    }, 500);
+
+    return () => clearInterval(interval);
+  }, [craters.length]);
+
 
   // Thread Master bonus: Clear recently fired spools after 3 seconds
   useEffect(() => {
@@ -1607,19 +1620,20 @@ export default function App() {
       });
     });
 
-    // Create craters at bomb position and adjacent positions
+    // Create craters at bomb position and adjacent positions (last 10 seconds)
+    const expiresAt = Date.now() + 10000;
     const newCraters: Crater[] = [
       {
         id: generateUUID(),
         x: Math.round(bomb.x),
         y: Math.round(bomb.y),
-        turnsRemaining: 3,
+        expiresAt,
       },
       ...adjacentPositions.map(pos => ({
         id: generateUUID(),
         x: pos.x,
         y: pos.y,
-        turnsRemaining: 3,
+        expiresAt,
       }))
     ];
 
@@ -1982,13 +1996,6 @@ export default function App() {
 
     // Remove the clicked block from grid
     setBlocks(prev => prev.filter(b => b.id !== block.id));
-
-    // Decrement crater turns
-    setCraters(prev => {
-      return prev
-        .map(c => ({ ...c, turnsRemaining: c.turnsRemaining - 1 }))
-        .filter(c => c.turnsRemaining > 0);
-    });
 
     // Place block in empty spool (ONE block per spool)
     setSpools(prev => {

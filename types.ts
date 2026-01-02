@@ -22,7 +22,7 @@ export interface Crater {
   id: string;
   x: number;
   y: number;
-  turnsRemaining: number; // Number of turns until crater disappears
+  expiresAt: number; // Timestamp when crater disappears (10 seconds after creation)
 }
 
 export interface DragonSegment {
