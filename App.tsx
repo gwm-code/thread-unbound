@@ -189,6 +189,14 @@ export default function App() {
   const [multiplierPopup, setMultiplierPopup] = useState<{ x: number; y: number; id: string } | null>(null); // Multiplier visual popup
   const [dragonProjectiles, setDragonProjectiles] = useState<Array<{ id: string; type: 'bomb' | 'freeze' | 'aggro'; targetX: number; targetY: number }>>([]);
 
+  // Consumable effects
+  const [showInventory, setShowInventory] = useState(false); // Chest inventory modal
+  const [dragonFrozen, setDragonFrozen] = useState(false); // Freeze Time consumable - stops dragon growth
+  const [dragonFrozenEndTime, setDragonFrozenEndTime] = useState<number>(0);
+  const [conveyorSpeedActive, setConveyorSpeedActive] = useState(false); // Conveyor Speed consumable - 2x speed
+  const [conveyorSpeedEndTime, setConveyorSpeedEndTime] = useState<number>(0);
+  const [availableUndos, setAvailableUndos] = useState(0); // Extra undos available from consumables
+
   // Load progress, settings, and currency from localStorage on mount
   useEffect(() => {
     // Load progress
@@ -874,6 +882,87 @@ export default function App() {
     updateChallengeProgress();
   }, [updateChallengeProgress]);
 
+  // Use consumable from inventory
+  const useConsumable = (consumableId: string) => {
+    console.log('Using consumable:', consumableId);
+
+    switch (consumableId) {
+      case 'extra-undo':
+        if (inventory.extraUndos <= 0) {
+          console.log('No extra undos available');
+          return;
+        }
+        // Add current state to history (gives +1 undo use)
+        const currentState: HistoryState = {
+          blocks: JSON.parse(JSON.stringify(blocks)),
+          spools: JSON.parse(JSON.stringify(spools)),
+          dragon: [...dragon],
+          conveyorBlocks: JSON.parse(JSON.stringify(conveyorBlocks)),
+          score
+        };
+        setHistory(prev => [...prev, currentState]);
+        setInventory(prev => ({ ...prev, extraUndos: prev.extraUndos - 1 }));
+        console.log('✓ Extra undo activated! History length:', history.length + 1);
+        break;
+
+      case 'freeze-time':
+        if (inventory.freezeTime <= 0) {
+          console.log('No freeze time available');
+          return;
+        }
+        // Freeze dragon for 5 seconds
+        setDragonFrozen(true);
+        setDragonFrozenEndTime(Date.now() + 5000);
+        setInventory(prev => ({ ...prev, freezeTime: prev.freezeTime - 1 }));
+        console.log('❄️ Dragon frozen for 5 seconds!');
+        // Auto-unfreeze after 5 seconds
+        setTimeout(() => {
+          setDragonFrozen(false);
+          setDragonFrozenEndTime(0);
+        }, 5000);
+        break;
+
+      case 'conveyor-speed':
+        if (inventory.conveyorSpeed <= 0) {
+          console.log('No conveyor speed available');
+          return;
+        }
+        // 2x conveyor speed for 30 seconds
+        setConveyorSpeedActive(true);
+        setConveyorSpeedEndTime(Date.now() + 30000);
+        setInventory(prev => ({ ...prev, conveyorSpeed: prev.conveyorSpeed - 1 }));
+        console.log('💨 Conveyor speed 2x for 30 seconds!');
+        // Auto-deactivate after 30 seconds
+        setTimeout(() => {
+          setConveyorSpeedActive(false);
+          setConveyorSpeedEndTime(0);
+        }, 30000);
+        break;
+
+      case 'reroll-grid':
+        if (inventory.rerollGrid <= 0) {
+          console.log('No reroll grid available');
+          return;
+        }
+        // Reroll the entire grid (keep score and dragon)
+        pushHistory();
+        const newBlocks = shuffleBlocks([...blocks]);
+        setBlocks(newBlocks);
+        setInventory(prev => ({ ...prev, rerollGrid: prev.rerollGrid - 1 }));
+        console.log('🎲 Grid rerolled!');
+        // TODO: Add visual effect
+        break;
+
+      default:
+        console.log('Unknown consumable:', consumableId);
+        return;
+    }
+
+    playSound('success');
+    triggerHaptic(50);
+    setShowInventory(false); // Close inventory after use
+  };
+
   // Claim challenge reward
   const handleClaimReward = (challengeId: string) => {
     console.log('Claiming reward for challenge:', challengeId);
@@ -1201,9 +1290,15 @@ export default function App() {
   };
 
   // --- SURVIVAL CLOCK ---
-  // Adds segment at dynamic interval (faster on harder levels + speed multiplier + aggro effect)
+  // Adds segment at dynamic interval (faster on harder levels + speed multipliplier + aggro effect)
   useEffect(() => {
     if (currentScreen !== 'playing' || gameState !== 'playing') return;
+
+    // Don't grow dragon if frozen by Freeze Time consumable
+    if (dragonFrozen) {
+      console.log('❄️ Dragon growth paused - frozen!');
+      return;
+    }
 
     // Apply both speed multiplier AND aggro effect (multiplicative)
     let effectiveMultiplier = speedMultiplier;
@@ -1406,7 +1501,7 @@ export default function App() {
     }, adjustedInterval);
 
     return () => clearInterval(interval);
-  }, [currentScreen, gameState, dragonGrowthInterval, speedMultiplier, aggroEffectActive]);
+  }, [currentScreen, gameState, dragonGrowthInterval, speedMultiplier, aggroEffectActive, dragonFrozen]);
 
   // --- SWALLOWING CHECK ---
   // Check if dragon head has reached kitty position (end of path)
