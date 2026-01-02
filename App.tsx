@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { RefreshCw, Play, Info, RotateCcw, Shuffle, Trophy, XCircle, Clock, Map, Coins, Gem } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 // Toast removed - no longer needed
 import { Block, Spool, BlockColor, Thread, GameState, DragonSegment, Kitty, PlayerCurrency, PlayerInventory, PlayerStats, PlayerAchievements, Crater } from './types';
 import {
@@ -168,6 +169,8 @@ export default function App() {
   const [lastFreezeSpitTime, setLastFreezeSpitTime] = useState<number>(0); // Prevent spam
   const [craters, setCraters] = useState<Crater[]>([]); // Unusable grid spots
   const [lastBombSpitTime, setLastBombSpitTime] = useState<number>(0); // Prevent spam
+  const [multiplierPopup, setMultiplierPopup] = useState<{ x: number; y: number; id: string } | null>(null); // Multiplier visual popup
+  const [dragonProjectiles, setDragonProjectiles] = useState<Array<{ id: string; type: 'bomb' | 'freeze' | 'aggro'; targetX: number; targetY: number }>>([]);
 
   // Load progress, settings, and currency from localStorage on mount
   useEffect(() => {
@@ -1004,6 +1007,20 @@ export default function App() {
               playSound('error');
               triggerHaptic([50, 50, 50]);
 
+              // Show projectile animation
+              const projectileId = generateUUID();
+              setDragonProjectiles(prev => [...prev, {
+                id: projectileId,
+                type: 'freeze',
+                targetX: randomSpoolIdx,
+                targetY: -1 // Spool target
+              }]);
+
+              // Remove projectile after animation (500ms)
+              setTimeout(() => {
+                setDragonProjectiles(prev => prev.filter(p => p.id !== projectileId));
+              }, 500);
+
               // Create freeze tile
               const freezeTile: Block = {
                 id: generateUUID(),
@@ -1015,25 +1032,30 @@ export default function App() {
                 threadCount: 0, // Doesn't remove segments
               };
 
-              // Place freeze tile in random empty spool
-              const newSpools = [...prevSpools];
-              newSpools[randomSpoolIdx] = { ...newSpools[randomSpoolIdx], block: freezeTile };
-
-              // Activate freeze effect (freeze ALL spools for 10 seconds)
-              setFreezeEffectActive(true);
-              setFreezeEffectEndTime(currentTime + 10000);
-              setLastFreezeSpitTime(currentTime);
-
-              // Remove freeze tile from spool after 500ms (visual feedback, then clear)
+              // Place freeze tile in random empty spool (after projectile animation)
               setTimeout(() => {
                 setSpools(prev => {
-                  const cleared = [...prev];
-                  cleared[randomSpoolIdx] = { ...cleared[randomSpoolIdx], block: null };
-                  return cleared;
+                  const newSpools = [...prev];
+                  newSpools[randomSpoolIdx] = { ...newSpools[randomSpoolIdx], block: freezeTile };
+                  return newSpools;
                 });
+
+                // Activate freeze effect (freeze ALL spools for 10 seconds)
+                setFreezeEffectActive(true);
+                setFreezeEffectEndTime(currentTime + 10000);
+                setLastFreezeSpitTime(currentTime);
+
+                // Remove freeze tile from spool after 500ms (visual feedback, then clear)
+                setTimeout(() => {
+                  setSpools(prev2 => {
+                    const cleared = [...prev2];
+                    cleared[randomSpoolIdx] = { ...cleared[randomSpoolIdx], block: null };
+                    return cleared;
+                  });
+                }, 500);
               }, 500);
 
-              return newSpools;
+              return prevSpools;
             }
 
             // No empty spools - no effect
@@ -1068,24 +1090,42 @@ export default function App() {
             playSound('error');
             triggerHaptic([50, 50, 50]);
 
-            const bombTile: Block = {
-              id: generateUUID(),
-              x: randomPos.x,
-              y: randomPos.y,
-              color: 'red', // Bombs are red for danger
-              direction: 'DOWN',
+            // Show projectile animation
+            const projectileId = generateUUID();
+            setDragonProjectiles(prev => [...prev, {
+              id: projectileId,
               type: 'bomb',
-              threadCount: 0, // Doesn't remove segments
-              countdown: Date.now() + 5000, // Explodes in 5 seconds (timestamp)
-            };
+              targetX: randomPos.x,
+              targetY: randomPos.y
+            }]);
 
-            setBlocks(prev => [...prev, bombTile]);
-            setLastBombSpitTime(currentTime);
-
-            // Schedule bomb explosion after 5 seconds
+            // Remove projectile after animation (500ms)
             setTimeout(() => {
-              handleBombExplosion(bombTile);
-            }, 5000);
+              setDragonProjectiles(prev => prev.filter(p => p.id !== projectileId));
+            }, 500);
+
+            // Add bomb tile after projectile animation
+            setTimeout(() => {
+              const bombTile: Block = {
+                id: generateUUID(),
+                x: randomPos.x,
+                y: randomPos.y,
+                color: 'red', // Bombs are red for danger
+                direction: 'DOWN',
+                type: 'bomb',
+                threadCount: 0, // Doesn't remove segments
+                countdown: Date.now() + 5000, // Explodes in 5 seconds (timestamp)
+              };
+
+              setBlocks(prev => [...prev, bombTile]);
+
+              // Schedule bomb explosion after 5 seconds
+              setTimeout(() => {
+                handleBombExplosion(bombTile);
+              }, 5000);
+            }, 500);
+
+            setLastBombSpitTime(currentTime);
           }
         }
       }
@@ -1176,20 +1216,40 @@ export default function App() {
 
         if (emptyPositions.length > 0) {
           const randomPos = emptyPositions[Math.floor(Math.random() * emptyPositions.length)];
-          const aggroTile: Block = {
-            id: generateUUID(),
-            x: randomPos.x,
-            y: randomPos.y,
-            color: 'red', // Aggro tiles are always red for visibility
-            direction: 'UP',
-            type: 'aggro',
-            threadCount: 0, // Doesn't remove segments
-          };
 
-          setBlocks(prev => [...prev, aggroTile]);
-          setLastAggroSpitTime(currentTime);
           playSound('error'); // Warning sound
           triggerHaptic([50, 50, 50]); // Strong haptic
+
+          // Show projectile animation
+          const projectileId = generateUUID();
+          setDragonProjectiles(prev => [...prev, {
+            id: projectileId,
+            type: 'aggro',
+            targetX: randomPos.x,
+            targetY: randomPos.y
+          }]);
+
+          // Remove projectile after animation (500ms)
+          setTimeout(() => {
+            setDragonProjectiles(prev => prev.filter(p => p.id !== projectileId));
+          }, 500);
+
+          // Add aggro tile after projectile animation
+          setTimeout(() => {
+            const aggroTile: Block = {
+              id: generateUUID(),
+              x: randomPos.x,
+              y: randomPos.y,
+              color: 'red', // Aggro tiles are always red for visibility
+              direction: 'UP',
+              type: 'aggro',
+              threadCount: 0, // Doesn't remove segments
+            };
+
+            setBlocks(prev => [...prev, aggroTile]);
+          }, 500);
+
+          setLastAggroSpitTime(currentTime);
         }
       }
     } else {
@@ -1201,29 +1261,23 @@ export default function App() {
   }, [currentScreen, dragon.length, gameState, dragonUnder5StartTime, lastAggroSpitTime, blocks]);
 
   // --- RANDOM TILE DIRECTION CHANGER ---
-  // Change direction of random tiles every 3 seconds
-  useEffect(() => {
-    if (currentScreen !== 'playing' || gameState !== 'playing') return;
+  // Change direction of random tiles after every player move
+  const randomizeRandomTileDirections = () => {
+    setBlocks(prev => {
+      const hasRandomTiles = prev.some(b => b.type === 'random');
+      if (!hasRandomTiles) return prev;
 
-    const interval = setInterval(() => {
-      setBlocks(prev => {
-        const hasRandomTiles = prev.some(b => b.type === 'random');
-        if (!hasRandomTiles) return prev;
-
-        return prev.map(b => {
-          if (b.type === 'random') {
-            // Pick a random direction
-            const directions: Direction[] = ['UP', 'DOWN', 'LEFT', 'RIGHT', 'UP-LEFT', 'UP-RIGHT', 'DOWN-LEFT', 'DOWN-RIGHT'];
-            const randomDir = directions[Math.floor(Math.random() * directions.length)];
-            return { ...b, direction: randomDir };
-          }
-          return b;
-        });
+      return prev.map(b => {
+        if (b.type === 'random') {
+          // Pick a random direction
+          const directions: Direction[] = ['UP', 'DOWN', 'LEFT', 'RIGHT', 'UP-LEFT', 'UP-RIGHT', 'DOWN-LEFT', 'DOWN-RIGHT'];
+          const randomDir = directions[Math.floor(Math.random() * directions.length)];
+          return { ...b, direction: randomDir };
+        }
+        return b;
       });
-    }, 3000); // Change every 3 seconds
-
-    return () => clearInterval(interval);
-  }, [currentScreen, gameState]);
+    });
+  };
 
   // --- AUTO-FIRE MECHANISM ---
   // Check if snake head color matches any spool, then fire automatically
@@ -1792,6 +1846,16 @@ export default function App() {
         playSound('pop');
         triggerHaptic([20, 20, 20]);
 
+        // Show popup at tile location
+        setMultiplierPopup({
+          x: block.x,
+          y: block.y,
+          id: generateUUID()
+        });
+
+        // Clear popup after animation (1.5 seconds)
+        setTimeout(() => setMultiplierPopup(null), 1500);
+
         // Remove multiplier tile from board
         setBlocks(prev => prev.filter(b => b.id !== block.id));
 
@@ -2015,6 +2079,9 @@ export default function App() {
 
     setTimeout(() => setActiveThreads(prev => prev.filter(t => t.id !== threadId)), 500);
 
+    // Randomize all random tiles' directions after each move
+    randomizeRandomTileDirections();
+
     // Note: Key blocks are handled separately above and never reach this point
   };
 
@@ -2202,7 +2269,7 @@ export default function App() {
         </div>
 
         {/* Grid - Centered */}
-        <div className="w-full flex items-center justify-center z-20">
+        <div className="w-full flex items-center justify-center z-20 relative">
           <Grid
             blocks={blocks}
             gridSize={GRID_SIZE}
@@ -2211,7 +2278,85 @@ export default function App() {
             aggroTileId={blocks.find(b => b.type === 'aggro')?.id || null}
             craters={craters}
           />
+
+          {/* Multiplier Popup - Mario 1-Up style */}
+          {multiplierPopup && (
+            <motion.div
+              key={multiplierPopup.id}
+              initial={{ opacity: 1, y: 0, scale: 0.5 }}
+              animate={{ opacity: 0, y: -100, scale: 1.5 }}
+              transition={{ duration: 1.5, ease: "easeOut" }}
+              className="absolute pointer-events-none z-50"
+              style={{
+                left: `${(multiplierPopup.x / GRID_SIZE.cols) * 100}%`,
+                top: `${(multiplierPopup.y / GRID_SIZE.rows) * 100}%`,
+              }}
+            >
+              <div className="text-4xl font-bold text-yellow-400 drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)]" style={{ textShadow: '2px 2px 0px #000, -2px -2px 0px #000, 2px -2px 0px #000, -2px 2px 0px #000' }}>
+                2X
+              </div>
+            </motion.div>
+          )}
         </div>
+
+        {/* Dragon Projectiles - Visual effects for hazard tiles coming from dragon */}
+        <AnimatePresence>
+          {dragonProjectiles.map((projectile) => {
+            // Projectile emoji based on type
+            const emoji = projectile.type === 'bomb' ? '💣' : projectile.type === 'freeze' ? '🧊' : '😡';
+
+            // Calculate target position
+            let targetStyle: React.CSSProperties = {};
+
+            if (projectile.targetY === -1) {
+              // Targeting a spool - position above grid at spool location
+              const spoolCount = inventory.hasSpoolUpgrade ? 5 : 4;
+              const spoolWidth = 100 / spoolCount; // Percentage width of each spool
+              const spoolCenterX = (projectile.targetX + 0.5) * spoolWidth;
+
+              targetStyle = {
+                left: `${spoolCenterX}%`,
+                top: '-60px', // Above grid, at spool level
+              };
+            } else {
+              // Targeting a grid position
+              targetStyle = {
+                left: `${((projectile.targetX + 0.5) / GRID_SIZE.cols) * 100}%`,
+                top: `${((projectile.targetY + 0.5) / GRID_SIZE.rows) * 100}%`,
+              };
+            }
+
+            return (
+              <motion.div
+                key={projectile.id}
+                initial={{
+                  x: '50%', // Start from center (dragon position)
+                  y: '-150px', // Start from dragon (above everything)
+                  scale: 0.5,
+                  opacity: 0.8
+                }}
+                animate={{
+                  x: targetStyle.left,
+                  y: targetStyle.top,
+                  scale: 1,
+                  opacity: 1
+                }}
+                exit={{ scale: 0, opacity: 0 }}
+                transition={{
+                  duration: 0.5,
+                  ease: "easeInOut"
+                }}
+                className="absolute pointer-events-none z-50 text-3xl drop-shadow-lg"
+                style={{
+                  left: '50%',
+                  top: '0',
+                }}
+              >
+                {emoji}
+              </motion.div>
+            );
+          })}
+        </AnimatePresence>
 
         {/* Conveyor Belt - More spacing from grid to prevent overlap */}
         <div className="w-full pt-3 pb-1">

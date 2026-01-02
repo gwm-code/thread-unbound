@@ -202,13 +202,6 @@ export const BlockView: React.FC<BlockViewProps> = ({
           <div className="text-2xl drop-shadow-md animate-bounce">😡</div>
         ) : isSpin ? (
           <div className="text-2xl drop-shadow-md" style={{ animation: 'spin 2s linear infinite' }}>🔄</div>
-        ) : isRandom ? (
-          <div className="relative">
-            <div className="text-2xl drop-shadow-md">🎲</div>
-            <div className="absolute inset-0 -z-10">
-              <Chevron direction={block.direction} className="opacity-50 scale-75" />
-            </div>
-          </div>
         ) : isMultiplier ? (
           <div className="text-2xl drop-shadow-md animate-pulse">🧩</div>
         ) : isMystery ? (
@@ -227,10 +220,15 @@ export const BlockView: React.FC<BlockViewProps> = ({
         ) : (
           <Chevron direction={block.direction} />
         )}
+
+        {/* Random tile indicator - small dice in top-left corner */}
+        {isRandom && (
+          <div className="absolute top-0.5 left-0.5 text-xs">🎲</div>
+        )}
       </div>
 
       {/* Thread Count Badge - Bottom Right Corner (only for normal tiles) */}
-      {!isKey && !isSniper && !isRainbow && !isAggro && !isSpin && !isRandom && !isMultiplier && !isMystery && !isFreeze && !isBomb && (
+      {!isKey && !isSniper && !isRainbow && !isAggro && !isSpin && !isMultiplier && !isMystery && !isFreeze && !isBomb && (
         <div className="absolute bottom-0.5 right-0.5 bg-black/70 text-white rounded-full w-4 h-4 flex items-center justify-center text-[8px] font-bold z-20">
           {block.threadCount}
         </div>
